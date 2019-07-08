@@ -7,3 +7,30 @@
 // (R0, R1, R2 refer to RAM[0], RAM[1], and RAM[2], respectively.)
 
 // Put your code here.
+
+// Make sure R2 is 0.
+@R2
+M=0
+
+(LOOP)
+    // if R0 is 0 end LOOP
+    @R0
+    D=M
+    @END
+    D;JEQ
+
+    // Add R1 to R2
+    @R1
+    D=M
+    @R2
+    M=D+M
+
+    // Subract 1 from R0
+    @R0
+    M=M-1
+    @LOOP
+    0;JMP
+
+(END)
+    @END
+    0;JMP

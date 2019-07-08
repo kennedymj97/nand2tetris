@@ -39,5 +39,9 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    Mux16(a=instruction, b=aluout, sel=instruction[15], out=instructionmuxout);
+    ARegister(in=instructionmuxout, load=instructionmuxout[5], out=aregout, out[0..14]=addressM);
+    Mux16(a=inM, b=aregout, sel=instruction[12], out=inMmuxout);
+    DRegister(in=aluout, load=aluout[4], out=dregout);
+    ALU(a=)
 }
