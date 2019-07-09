@@ -42,8 +42,8 @@ CHIP CPU {
     // core components
     Mux16(a=instruction, b=aluout, sel=instruction[15], out=instructionmuxout);
 
-    Not(in=instruction[15], out=aregload);
-    Or(a=instruction[5], b=aregload, out=aregload);
+    Not(in=instruction[15], out=aregloadcheck1);
+    Or(a=instruction[5], b=aregloadcheck1, out=aregload);
     ARegister(in=instructionmuxout, load=aregload, out=aregout, out[0..14]=addressM);
 
     Mux16(a=aregout, b=inM, sel=instruction[12], out=inMmuxout);
