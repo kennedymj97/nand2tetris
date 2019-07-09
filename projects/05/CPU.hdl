@@ -39,9 +39,51 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
+    // core components
     Mux16(a=instruction, b=aluout, sel=instruction[15], out=instructionmuxout);
-    ARegister(in=instructionmuxout, load=instructionmuxout[5], out=aregout, out[0..14]=addressM);
-    Mux16(a=inM, b=aregout, sel=instruction[12], out=inMmuxout);
-    DRegister(in=aluout, load=aluout[4], out=dregout);
-    ALU(a=)
+
+    Not(in=instruction[15], out=aregload);
+    Or(a=instruction[5], b=aregload, out=aregload);
+    ARegister(in=instructionmuxout, load=aregload, out=aregout, out[0..14]=addressM);
+
+    Mux16(a=aregout, b=inM, sel=instruction[12], out=inMmuxout);
+
+    And(a=instruction[4], b=instruction[15], out=dregload);
+    DRegister(in=aluout, load=dregload, out=dregout);
+
+    ALU(x=dregout, y=inMmuxout, zx=instruction[11], nx=instruction[10], zy=instruction[9], ny=instruction[8], f=instruction[7], no=instruction[6], out[0..15]=aluout, out=outM, zr=aluzr, ng=alung);
+    
+    PC(in=aregout, load=makejump, inc=pcinc, reset=reset, out[0..14]=pc);
+    
+    // writeM logic
+    Or(a=instruction[0], b=instruction[1], out=checknojump1);
+    Or(a=checknojump1, b=instruction[2], out=checknojump2);
+    Not(in=checknojump2, out=nojump);
+
+    And(a=instruction[3], b=nojump, out=writemcheck1);
+    And(a=writemcheck1, b=instruction[15], out=writeM);
+
+    // useful logic
+    And(a=instruction[0], b=instruction[1], out=jge);
+    And(a=instruction[0], b=instruction[2], out=jne);
+    And(a=instruction[1], b=instruction[2], out=jle);
+    And(a=jge, b=instruction[2], out=jmp);
+
+    // jump conditions
+    Not(in=alung, out=notalung);
+    Not(in=aluzr, out=notaluzr);
+    And(a=notalung, b=notaluzr, out=aluoutpositive);
+    Not(in=aluoutpositive, out=aluoutnotpositive);
+
+    And(a=instruction[0], b=aluoutpositive, out=jumpcond1);
+    And(a=instruction[1], b=aluzr, out=jumpcond2);
+    And(a=jge, b=notalung, out=jumpcond3);
+    And(a=instruction[2], b=alung, out=jumpcond4);
+    And(a=jne, b=notaluzr, out=jumpcond5);
+    And(a=jle, b=aluoutnotpositive, out=jumpcond6);
+
+    Or8Way(in[0]=false, in[1]=jumpcond1, in[2]=jumpcond2, in[3]=jumpcond3, in[4]=jumpcond4, in[5]=jumpcond5, in[6]=jumpcond6, in[7]=false, out=jumpcondmet);
+    And(a=instruction[15], b=jumpcondmet, out=makejump);
+
+    Not(in=makejump, out=pcinc);
 }
