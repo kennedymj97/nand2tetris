@@ -1,5 +1,4 @@
-def encode_A(command: str) -> str:
-    value = int(command[1:])
+def encode_A(value: int) -> str:
     bin_value = bin(value)
     bin_value_string = str(bin_value).replace('0b', '')
     encoded_command = '0' * 16

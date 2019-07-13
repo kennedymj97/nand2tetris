@@ -8,6 +8,8 @@ def format_line(line: str)->str:
 def get_command_type(command: str) -> str:
     if command[0] == '@':
         return 'A_COMMAND'
+    elif command.count('(') > 0 and command.count(')') > 0:
+        return 'L_COMMAND'
     else:
         return 'C_COMMAND'
 
@@ -23,3 +25,10 @@ def split_C(command: str)->(str,str,str):
         comp, jump = command.split(";")
         dest = "null"
     return (dest, comp, jump)
+
+def A_is_symbol(command: str)->bool:
+    try:
+        int(command)
+        return False
+    except ValueError:
+        return True
