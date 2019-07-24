@@ -44,6 +44,7 @@ func main() {
 
 	var p parser.VmParser
 	var aw translater.Translater
+	equalityCheckCount := 0
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -74,11 +75,14 @@ func main() {
 		}
 
 		var assemblyCode string
+		var equalityInc int
 		if commandType == "C_ARITHMETIC" {
-			assemblyCode = aw.WriteArithmetic()
+			assemblyCode, equalityInc = aw.WriteArithmetic(equalityCheckCount)
 		} else if commandType == "C_PUSH" {
 			assemblyCode = aw.WritePushPop()
 		}
+
+		equalityCheckCount += equalityInc
 
 		w.WriteString(assemblyCode)
 	}
