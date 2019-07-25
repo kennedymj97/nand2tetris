@@ -8,6 +8,7 @@ type Translater interface {
 }
 
 type AssemblyWriter struct {
+	Filename    string
 	CommandType string
 	Arg1        string
 	Arg2        int
@@ -135,16 +136,10 @@ M=!M
 
 func (aw *AssemblyWriter) WritePushPop() string {
 	var assemblyCode string
-	// 	if aw.CommandType == "C_PUSH" {
-	// 		switch aw.Arg1 {
-	// 		case "constant":
-	// 			assemblyCode = fmt.Sprintf(`@%d
-	// M=%d
-	// `, aw.StackPointer, aw.Arg2)
-	// 			return assemblyCode, aw.StackPointer + 1
-	// 		}
-	// 	}
-	assemblyCode = fmt.Sprintf(`@%d
+	if aw.CommandType == "C_PUSH" {
+		switch aw.Arg1 {
+		case "constant":
+			assemblyCode = fmt.Sprintf(`@%d
 D=A
 @SP
 A=M
@@ -152,5 +147,208 @@ M=D
 @SP
 M=M+1
 `, aw.Arg2)
-	return assemblyCode
+			return assemblyCode
+		case "argument":
+			assemblyCode = fmt.Sprintf(`@ARG
+D=M
+@%d
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+`, aw.Arg2)
+			return assemblyCode
+		case "local":
+			assemblyCode = fmt.Sprintf(`@LCL
+D=M
+@%d
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+`, aw.Arg2)
+			return assemblyCode
+		case "this":
+			assemblyCode = fmt.Sprintf(`@THIS
+D=M
+@%d
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+`, aw.Arg2)
+			return assemblyCode
+		case "that":
+			assemblyCode = fmt.Sprintf(`@THAT
+D=M
+@%d
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+`, aw.Arg2)
+			return assemblyCode
+		case "temp":
+			assemblyCode = fmt.Sprintf(`@5
+D=A
+@%d
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+`, aw.Arg2)
+			return assemblyCode
+		case "pointer":
+			assemblyCode = fmt.Sprintf(`@3
+D=A
+@%d
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+`, aw.Arg2)
+			return assemblyCode
+		case "static":
+			assemblyCode = fmt.Sprintf(`@%s.%d
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1
+`, aw.Filename, aw.Arg2)
+			return assemblyCode
+		}
+	} else if aw.CommandType == "C_POP" {
+		switch aw.Arg1 {
+		case "argument":
+			assemblyCode = fmt.Sprintf(`@SP
+M=M-1
+A=M
+D=M
+@ARG
+A=M
+D=D+A
+@%d
+D=D+A
+@SP
+A=M
+A=D-M
+D=D-A
+M=D
+`, aw.Arg2)
+			return assemblyCode
+		case "local":
+			assemblyCode = fmt.Sprintf(`@SP
+M=M-1
+A=M
+D=M
+@LCL
+A=M
+D=D+A
+@%d
+D=D+A
+@SP
+A=M
+A=D-M
+D=D-A
+M=D
+`, aw.Arg2)
+			return assemblyCode
+		case "this":
+			assemblyCode = fmt.Sprintf(`@SP
+M=M-1
+A=M
+D=M
+@THIS
+A=M
+D=D+A
+@%d
+D=D+A
+@SP
+A=M
+A=D-M
+D=D-A
+M=D
+`, aw.Arg2)
+			return assemblyCode
+		case "that":
+			assemblyCode = fmt.Sprintf(`@SP
+M=M-1
+A=M
+D=M
+@THAT
+A=M
+D=D+A
+@%d
+D=D+A
+@SP
+A=M
+A=D-M
+D=D-A
+M=D
+`, aw.Arg2)
+			return assemblyCode
+		case "temp":
+			assemblyCode = fmt.Sprintf(`@SP
+M=M-1
+A=M
+D=M
+@5
+D=D+A
+@%d
+D=D+A
+@SP
+A=M
+A=D-M
+D=D-A
+M=D
+`, aw.Arg2)
+			return assemblyCode
+		case "pointer":
+			assemblyCode = fmt.Sprintf(`@SP
+M=M-1
+A=M
+D=M
+@3
+D=D+A
+@%d
+D=D+A
+@SP
+A=M
+A=D-M
+D=D-A
+M=D
+`, aw.Arg2)
+			return assemblyCode
+		case "static":
+			assemblyCode = fmt.Sprintf(`@SP
+M=M-1
+A=M
+D=M
+@%s.%d
+M=D
+`, aw.Filename, aw.Arg2)
+			return assemblyCode
+		}
+	}
+	return ""
 }

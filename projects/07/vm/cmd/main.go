@@ -69,6 +69,7 @@ func main() {
 		}
 
 		aw = &translater.AssemblyWriter{
+			Filename:    filename,
 			CommandType: commandType,
 			Arg1:        firstArg,
 			Arg2:        secondArg,
@@ -78,7 +79,7 @@ func main() {
 		var equalityInc int
 		if commandType == "C_ARITHMETIC" {
 			assemblyCode, equalityInc = aw.WriteArithmetic(equalityCheckCount)
-		} else if commandType == "C_PUSH" {
+		} else if commandType == "C_PUSH" || commandType == "C_POP" {
 			assemblyCode = aw.WritePushPop()
 		}
 
