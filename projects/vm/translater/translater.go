@@ -5,6 +5,9 @@ import "fmt"
 type Translater interface {
 	WriteArithmetic(equalityCheckCount int) (string, int)
 	WritePushPop() string
+	WriteLabel() string
+	WriteGoto() string
+	WriteIf() string
 }
 
 type AssemblyWriter struct {
@@ -351,4 +354,28 @@ M=D
 		}
 	}
 	return ""
+}
+
+func (aw *AssemblyWriter) WriteLabel() string {
+	assemblyCode := fmt.Sprintf(`(%s.tempfunction$%s)
+`, aw.Filename, aw.Arg1)
+	return assemblyCode
+}
+
+func (aw *AssemblyWriter) WriteGoto() string {
+	assemblyCode := fmt.Sprintf(`@%s.tempfunction$%s
+0;JMP	
+`, aw.Filename, aw.Arg1)
+	return assemblyCode
+}
+
+func (aw *AssemblyWriter) WriteIf() string {
+	assemblyCode := fmt.Sprintf(`@SP
+M=M-1
+A=M
+D=M
+@%s.tempfunction$%s
+D;JNE
+`, aw.Filename, aw.Arg1)
+	return assemblyCode
 }

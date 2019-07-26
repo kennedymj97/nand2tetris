@@ -24,6 +24,7 @@ func main() {
 	}()
 
 	dirname, filename := filepath.Split(args[0])
+	fnameNoExt := strings.Replace(filename, ".vm", "", 1)
 	outFilename := strings.Replace(filename, ".vm", ".asm", 1)
 	outFilePath := dirname + outFilename
 	outFile, err := os.Create(outFilePath)
@@ -69,7 +70,7 @@ func main() {
 		}
 
 		aw = &translater.AssemblyWriter{
-			Filename:    filename,
+			Filename:    fnameNoExt,
 			CommandType: commandType,
 			Arg1:        firstArg,
 			Arg2:        secondArg,
@@ -77,10 +78,17 @@ func main() {
 
 		var assemblyCode string
 		var equalityInc int
-		if commandType == "C_ARITHMETIC" {
+		switch commandType {
+		case "C_ARITHMETIC":
 			assemblyCode, equalityInc = aw.WriteArithmetic(equalityCheckCount)
-		} else if commandType == "C_PUSH" || commandType == "C_POP" {
+		case "C_PUSH", "C_POP":
 			assemblyCode = aw.WritePushPop()
+		case "C_LABEL":
+			assemblyCode = aw.WriteLabel()
+		case "C_GOTO":
+			assemblyCode = aw.WriteGoto()
+		case "C_IF":
+			assemblyCode = aw.WriteIf()
 		}
 
 		equalityCheckCount += equalityInc
