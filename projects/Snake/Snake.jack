@@ -1,0 +1,50 @@
+class Snake {
+    field int headX, headY;
+    field int direction; // 0 = none, 1 = up, 2 = right, 3 = down, 4 = left;
+    field Grid grid;
+
+    constructor Snake new(int xPos, int yPos) {
+        let headX = xPos;
+        let headY = yPos;
+        let grid = Grid.new();
+        let direction = 0;
+        do draw();
+        return this;
+    }
+
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+
+    method void draw() {
+        do grid.drawSquare(headX, headY);
+        return;
+    }
+
+    method void updateDirection(int newDirection) {
+        let direction = newDirection;
+        return;
+    }
+
+    method void move() {
+        if (direction=0) {
+            return;
+        }
+        if (direction=1) {
+            let headY = headY - 1;
+            
+        }
+        if (direction=2) {
+            let headX = headX + 1;
+        }
+        if (direction=3) {
+            let headY = headY + 1;
+        }
+        if (direction=4) {
+            let headX = headX - 1;
+        }
+        do draw();
+        return;
+    }
+}

@@ -1,0 +1,23 @@
+class Square {
+    field int col, row; // location of top left corner
+    field int size;
+
+    constructor Square new(int Ax, int Ay, int Asize) {
+        let col = Ax;
+        let row = Ay;
+        let size = Asize;
+        do draw();
+        return this;
+    }
+
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+
+    method void draw() {
+        do Screen.setColor(true);
+        do Screen.drawRectangle(col, row, col + size, row + size);
+        return;
+    }
+}

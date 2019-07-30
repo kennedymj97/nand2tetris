@@ -1,0 +1,134 @@
+function Grid.new 0
+push constant 4
+call Memory.alloc 1
+pop pointer 0
+push constant 8
+pop this 2
+push constant 16
+pop this 3
+push pointer 0
+return
+function Grid.dispose 0
+push argument 0
+pop pointer 0
+push pointer 0
+call Memory.deAlloc 1
+pop temp 0
+push constant 0
+return
+function Grid.rows 0
+push argument 0
+pop pointer 0
+push constant 256
+push this 3
+push constant 2
+call Math.multiply 2
+sub
+push this 2
+call Math.divide 2
+pop this 1
+push this 1
+return
+function Grid.cols 0
+push argument 0
+pop pointer 0
+push constant 512
+push this 3
+push constant 2
+call Math.multiply 2
+sub
+push this 2
+call Math.divide 2
+pop this 0
+push this 0
+return
+function Grid.draw 0
+push argument 0
+pop pointer 0
+push constant 0
+not
+call Screen.setColor 1
+pop temp 0
+push this 3
+push constant 2
+sub
+push this 3
+push constant 2
+sub
+push constant 514
+push this 3
+sub
+push this 3
+push constant 2
+sub
+call Screen.drawLine 4
+pop temp 0
+push this 3
+push constant 2
+sub
+push this 3
+push constant 2
+sub
+push this 3
+push constant 2
+sub
+push constant 258
+push this 3
+sub
+call Screen.drawLine 4
+pop temp 0
+push constant 514
+push this 3
+sub
+push this 3
+push constant 2
+sub
+push constant 514
+push this 3
+sub
+push constant 258
+push this 3
+sub
+call Screen.drawLine 4
+pop temp 0
+push this 3
+push constant 2
+sub
+push constant 258
+push this 3
+sub
+push constant 514
+push this 3
+sub
+push constant 258
+push this 3
+sub
+call Screen.drawLine 4
+pop temp 0
+push constant 0
+return
+function Grid.drawSquare 3
+push argument 0
+pop pointer 0
+push this 3
+push argument 2
+push this 2
+call Math.multiply 2
+add
+pop local 1
+push this 3
+push argument 1
+push this 2
+call Math.multiply 2
+add
+pop local 2
+push local 2
+push local 1
+push this 2
+call Square.new 3
+pop local 0
+push local 0
+call Square.draw 1
+pop temp 0
+push constant 0
+return

@@ -1,0 +1,45 @@
+class Game {
+    static Snake snake;
+    static int key;
+
+    function void new() {
+        var Grid grid;
+        var int cols, rows;
+        var int startHeadCol, startHeadRow;
+
+        let grid = Grid.new();
+        do grid.draw();
+        let cols = grid.cols();
+        let rows = grid.rows();
+
+        let startHeadCol = Math.divide(cols, 2);
+        let startHeadRow = Math.divide(rows, 2);
+        let snake = Snake.new(startHeadCol, startHeadRow);
+
+        do Output.printString("Score: ");
+        do Output.printInt(0);
+
+        return;
+    }
+
+    function void loop() {
+        while (true) {
+            let key = Keyboard.keyPressed();
+            if (key=131) {
+                do snake.updateDirection(1);
+            }
+            if (key=132) {
+                do snake.updateDirection(2);
+            }
+            if (key=133) {
+                do snake.updateDirection(3);
+            }
+            if (key=130) {
+                do snake.updateDirection(4);
+            }
+            do snake.move();
+            do Sys.wait(100);
+        }
+        return;
+    }
+}

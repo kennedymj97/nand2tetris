@@ -1,0 +1,45 @@
+class Grid {
+    field int cols, rows;
+    field int size;
+    field int border;
+
+    constructor Grid new() {
+        let size = 8;
+        let border = 16;
+        return this;
+    }
+
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+
+    method int rows() {
+        let rows = Math.divide(256-(border*2), size);
+        return rows;
+    }
+
+    method int cols() {
+        let cols = Math.divide(512-(border*2), size);
+        return cols;
+    }
+
+    method void draw() {
+        do Screen.setColor(true);
+        do Screen.drawLine(border-2, border-2, 514-border, border-2);
+        do Screen.drawLine(border-2, border-2, border-2, 258-border);
+        do Screen.drawLine(514-border, border-2, 514-border, 258-border);
+        do Screen.drawLine(border-2, 258-border, 514-border, 258-border);
+        return;
+    }
+
+    method void drawSquare(int col, int row) {
+        var Square square;
+        var int rowPixels, colPixels;
+        let rowPixels = border + (row * size);
+        let colPixels = border + (col * size);
+        let square = Square.new(colPixels, rowPixels, size);
+        do square.draw();
+        return;
+    }
+}
