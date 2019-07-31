@@ -6,7 +6,7 @@ class Square {
         let col = Ax;
         let row = Ay;
         let size = Asize;
-        do draw();
+        // do draw(true);
         return this;
     }
 
@@ -15,8 +15,8 @@ class Square {
         return;
     }
 
-    method void draw() {
-        do Screen.setColor(true);
+    method void draw(bool color) {
+        do Screen.setColor(color);
         do Screen.drawRectangle(col, row, col + size, row + size);
         return;
     }

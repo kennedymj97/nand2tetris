@@ -1,10 +1,11 @@
 class Game {
     static Snake snake;
     static int key;
+    static int cols, rows;
+    static Grid grid;
+
 
     function void new() {
-        var Grid grid;
-        var int cols, rows;
         var int startHeadCol, startHeadRow;
 
         let grid = Grid.new();
@@ -15,6 +16,8 @@ class Game {
         let startHeadCol = Math.divide(cols, 2);
         let startHeadRow = Math.divide(rows, 2);
         let snake = Snake.new(startHeadCol, startHeadRow);
+
+        do grid.generateFood(cols, rows);
 
         do Output.printString("Score: ");
         do Output.printInt(0);
@@ -38,7 +41,7 @@ class Game {
                 do snake.updateDirection(4);
             }
             do snake.move();
-            do Sys.wait(100);
+            do Sys.wait(75);
         }
         return;
     }

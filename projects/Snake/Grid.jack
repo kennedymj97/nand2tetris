@@ -33,13 +33,22 @@ class Grid {
         return;
     }
 
-    method void drawSquare(int col, int row) {
+    method void drawSquare(int col, int row, bool color) {
         var Square square;
         var int rowPixels, colPixels;
         let rowPixels = border + (row * size);
         let colPixels = border + (col * size);
         let square = Square.new(colPixels, rowPixels, size);
-        do square.draw();
+        do square.draw(color);
+        return;
+    }
+
+    method void generateFood(int maxX, int maxY) {
+        var int x, y;
+        var Random rand;
+        let x = Random.randRange(maxX);
+        let y = Random.randRange(maxY);
+        do drawSquare(x, y, true);
         return;
     }
 }

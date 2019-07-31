@@ -1,11 +1,13 @@
 class Snake {
-    field int headX, headY;
+    field int headX, headY, tailX, tailY;
     field int direction; // 0 = none, 1 = up, 2 = right, 3 = down, 4 = left;
     field Grid grid;
 
     constructor Snake new(int xPos, int yPos) {
         let headX = xPos;
         let headY = yPos;
+        let tailX = xPos;
+        let tailY = yPos;
         let grid = Grid.new();
         let direction = 0;
         do draw();
@@ -18,7 +20,7 @@ class Snake {
     }
 
     method void draw() {
-        do grid.drawSquare(headX, headY);
+        do grid.drawSquare(tailX, tailY, true);
         return;
     }
 
@@ -27,13 +29,20 @@ class Snake {
         return;
     }
 
-    method void move() {
+    method void eraseTail() {
+        do grid.drawSquare(tailX, tailY, false);
+        return;
+    }
+
+    method void move(bool growSnake) {
+        if (~growSnake) {
+            do eraseTail()
+        }
         if (direction=0) {
             return;
         }
         if (direction=1) {
             let headY = headY - 1;
-            
         }
         if (direction=2) {
             let headX = headX + 1;

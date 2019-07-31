@@ -128,7 +128,26 @@ push this 2
 call Square.new 3
 pop local 0
 push local 0
-call Square.draw 1
+push argument 3
+call Square.draw 2
+pop temp 0
+push constant 0
+return
+function Grid.generateFood 3
+push argument 0
+pop pointer 0
+push argument 1
+call Random.randRange 1
+pop local 0
+push argument 2
+call Random.randRange 1
+pop local 1
+push pointer 0
+push local 0
+push local 1
+push constant 0
+not
+call Grid.drawSquare 4
 pop temp 0
 push constant 0
 return
