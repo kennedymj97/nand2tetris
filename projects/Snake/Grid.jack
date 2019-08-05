@@ -1,30 +1,25 @@
 class Grid {
-    field int cols, rows;
-    field int size;
-    field int border;
+    static int cols, rows;
+    static int size;
+    static int border;
 
-    constructor Grid new() {
+    function void init() {
         let size = 8;
         let border = 16;
-        return this;
-    }
-
-    method void dispose() {
-        do Memory.deAlloc(this);
         return;
     }
 
-    method int rows() {
+    function int rows() {
         let rows = Math.divide(256-(border*2), size);
         return rows;
     }
 
-    method int cols() {
+    function int cols() {
         let cols = Math.divide(512-(border*2), size);
         return cols;
     }
 
-    method void draw() {
+    function void draw() {
         do Screen.setColor(true);
         do Screen.drawLine(border-2, border-2, 514-border, border-2);
         do Screen.drawLine(border-2, border-2, border-2, 258-border);
@@ -33,22 +28,22 @@ class Grid {
         return;
     }
 
-    method void drawSquare(int col, int row, bool color) {
-        var Square square;
+    function void drawSquare(int col, int row, bool color) {
         var int rowPixels, colPixels;
         let rowPixels = border + (row * size);
         let colPixels = border + (col * size);
-        let square = Square.new(colPixels, rowPixels, size);
-        do square.draw(color);
+        do Square.init(colPixels, rowPixels, size);
+        do Square.draw(color);
         return;
     }
 
-    method void generateFood(int maxX, int maxY) {
-        var int x, y;
+    function Array generateFood(int maxX, int maxY) {
+        var Array position;
         var Random rand;
-        let x = Random.randRange(maxX);
-        let y = Random.randRange(maxY);
-        do drawSquare(x, y, true);
-        return;
+        let position = Array.new(2);
+        let position[0] = Random.randRange(maxX);
+        let position[1] = Random.randRange(maxY);
+        do Grid.drawSquare(position[0], position[1], true);
+        return position;
     }
 }

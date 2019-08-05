@@ -1,26 +1,30 @@
 class Game {
     static Snake snake;
     static int key;
+    static Array foodPosition;
     static int cols, rows;
-    static Grid grid;
-
+    static int headX, headY;
+    static int score;
 
     function void new() {
         var int startHeadCol, startHeadRow;
 
-        let grid = Grid.new();
-        do grid.draw();
-        let cols = grid.cols();
-        let rows = grid.rows();
+        do Grid.init();
+        do Grid.draw();
+        let cols = Grid.cols();
+        let rows = Grid.rows();
 
         let startHeadCol = Math.divide(cols, 2);
         let startHeadRow = Math.divide(rows, 2);
         let snake = Snake.new(startHeadCol, startHeadRow);
 
-        do grid.generateFood(cols, rows);
+        let foodPosition = Grid.generateFood(cols, rows);
+        let headX = snake.headX();
+        let headY = snake.headY();
 
+        let score = 0;
         do Output.printString("Score: ");
-        do Output.printInt(0);
+        do Output.printInt(score);
 
         return;
     }
@@ -40,7 +44,18 @@ class Game {
             if (key=130) {
                 do snake.updateDirection(4);
             }
-            do snake.move();
+            let headX = snake.headX();
+            let headY = snake.headY();
+            if (foodPosition[0] = headX & foodPosition[1] = headY) {
+                do snake.move(true);
+                let foodPosition = Grid.generateFood(cols, rows);
+                do Output.backSpace();
+                let score = score + 1;
+                do Output.printInt(score);
+            } 
+            else {
+                do snake.move(false);
+            }
             do Sys.wait(75);
         }
         return;

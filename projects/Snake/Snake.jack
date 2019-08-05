@@ -1,14 +1,26 @@
 class Snake {
-    field int headX, headY, tailX, tailY;
     field int direction; // 0 = none, 1 = up, 2 = right, 3 = down, 4 = left;
     field Grid grid;
+    field Array snakeX, snakeY;
+    field Array tempX, tempY;
+    field Array snakeLen;
+    field int snakeMem;
 
     constructor Snake new(int xPos, int yPos) {
-        let headX = xPos;
-        let headY = yPos;
-        let tailX = xPos;
-        let tailY = yPos;
-        let grid = Grid.new();
+        var int cols, rows;
+        let grid = Grid.init();
+        let rows = Grid.rows();
+        let cols = Grid.cols();
+        let snakeMem = cols*rows;
+        let snakeX = Array.new(snakeMem);
+        let snakeY = Array.new(snakeMem);
+        let tempX = Array.new(snakeMem);
+        let tempY = Array.new(snakeMem);
+        let snakeX[0] = xPos;
+        let snakeY[0] = yPos;
+        let tempX[0] = xPos;
+        let tempY[0] = yPos;
+        let snakeLen = 1;
         let direction = 0;
         do draw();
         return this;
@@ -20,7 +32,7 @@ class Snake {
     }
 
     method void draw() {
-        do grid.drawSquare(tailX, tailY, true);
+        do Grid.drawSquare(snakeX[0], snakeY[0], true);
         return;
     }
 
@@ -29,31 +41,59 @@ class Snake {
         return;
     }
 
-    method void eraseTail() {
-        do grid.drawSquare(tailX, tailY, false);
-        return;
-    }
-
     method void move(bool growSnake) {
-        if (~growSnake) {
-            do eraseTail()
-        }
+        var int i;
+        var int tailX, tailY;
         if (direction=0) {
             return;
         }
+
+        let tailX = snakeX[(snakeLen-1)];
+        let tailY = snakeY[(snakeLen-1)];
+
+        // if grow add 1 to snake len
+        if (growSnake) {
+            let snakeLen = snakeLen + 1;
+        }
+
+        // propogate position of element to next section
+        let i = 0;
+        while (i < (snakeLen-1)) {
+            let tempX[(i+1)] = snakeX[i];
+            let tempY[(i+1)] = snakeY[i];
+            let i = i + 1;
+        }
+        // update position of head
         if (direction=1) {
-            let headY = headY - 1;
+            let tempY[0] = snakeY[0] - 1;
         }
         if (direction=2) {
-            let headX = headX + 1;
+            let tempX[0] = snakeX[0] + 1;
         }
         if (direction=3) {
-            let headY = headY + 1;
+            let tempY[0] = snakeY[0] + 1;
         }
         if (direction=4) {
-            let headX = headX - 1;
+            let tempX[0] = snakeX[0] - 1;
         }
+        // set it so snake is now equal to temp
+        let i = 0;
+        while (i<snakeLen) {
+            let snakeX[i] = tempX[i];
+            let snakeY[i] = tempY[i];
+            let i = i + 1;
+        }
+        // draw new snake
         do draw();
+        do Grid.drawSquare(tailX, tailY, false);
         return;
+    }
+
+    method int headX() {
+        return snakeX[0];
+    }
+
+    method int headY() {
+        return snakeY[0];
     }
 }
