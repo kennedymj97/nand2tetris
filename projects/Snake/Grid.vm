@@ -113,41 +113,24 @@ call Square.draw 1
 pop temp 0
 push constant 0
 return
-function Grid.generateFood 2
-push constant 2
-call Array.new 1
-pop local 0
-push constant 0
-push local 0
-add
+function Grid.generateFood 1
 push argument 0
 call Random.randRange 1
-pop temp 0
-pop pointer 1
-push temp 0
-pop that 0
-push constant 1
-push local 0
-add
+pop static 4
 push argument 1
 call Random.randRange 1
-pop temp 0
-pop pointer 1
-push temp 0
-pop that 0
-push constant 0
-push local 0
-add
-pop pointer 1
-push that 0
-push constant 1
-push local 0
-add
-pop pointer 1
-push that 0
+pop static 5
+push static 4
+push static 5
 push constant 0
 not
 call Grid.drawSquare 3
 pop temp 0
-push local 0
+push constant 0
+return
+function Grid.foodX 0
+push static 4
+return
+function Grid.foodY 0
+push static 5
 return

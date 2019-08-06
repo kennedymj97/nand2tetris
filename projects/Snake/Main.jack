@@ -1,7 +1,28 @@
 class Main {
     function void main() {
-        do Game.new();
-        do Game.loop();
+        var int key;
+        var Game game;
+        var bool gameover, exit;
+        let exit = false;
+        while (~exit) {
+            let game = Game.new();
+            do game.run();
+            let gameover = true;
+            while (gameover) {
+                let key = Keyboard.keyPressed();
+                if (key=32) {
+                    do game.dispose();
+                    do Screen.clearScreen();
+                    let gameover = false;
+                }
+                if (key=140) {
+                    do game.dispose();
+                    do Screen.clearScreen();
+                    let gameover = false;
+                    let exit = true;
+                }
+            }
+        }
         return;
     }
 }

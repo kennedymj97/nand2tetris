@@ -3,8 +3,8 @@ class Snake {
     field Grid grid;
     field Array snakeX, snakeY;
     field Array tempX, tempY;
-    field Array snakeLen;
-    field int snakeMem;
+    field int snakeLen, snakeMem;
+    field bool hitTail;
 
     constructor Snake new(int xPos, int yPos) {
         var int cols, rows;
@@ -22,11 +22,16 @@ class Snake {
         let tempY[0] = yPos;
         let snakeLen = 1;
         let direction = 0;
+        let hitTail = false;
         do draw();
         return this;
     }
 
     method void dispose() {
+        do snakeX.dispose();
+        do snakeY.dispose();
+        do tempX.dispose();
+        do tempY.dispose();
         do Memory.deAlloc(this);
         return;
     }
@@ -81,6 +86,11 @@ class Snake {
         while (i<snakeLen) {
             let snakeX[i] = tempX[i];
             let snakeY[i] = tempY[i];
+            if (i>0) {
+                if ((snakeX[0]=snakeX[i]) & (snakeY[0]=snakeY[i])) {
+                    let hitTail = true;
+                }
+            }
             let i = i + 1;
         }
         // draw new snake
@@ -95,5 +105,9 @@ class Snake {
 
     method int headY() {
         return snakeY[0];
+    }
+
+    method bool hitTail() {
+        return hitTail;
     }
 }

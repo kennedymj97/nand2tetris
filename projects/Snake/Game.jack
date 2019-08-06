@@ -1,36 +1,49 @@
 class Game {
-    static Snake snake;
-    static int key;
-    static Array foodPosition;
-    static int cols, rows;
-    static int headX, headY;
-    static int score;
+    field Snake snake;
+    field int key;
+    field int cols, rows;
+    field int headX, headY;
+    field int score;
+    field int foodX, foodY;
+    field bool hitTail;
 
-    function void new() {
+    constructor Game new() {
         var int startHeadCol, startHeadRow;
-
         do Grid.init();
         do Grid.draw();
         let cols = Grid.cols();
         let rows = Grid.rows();
+        let cols = cols-1;
+        let rows = rows-1;
 
         let startHeadCol = Math.divide(cols, 2);
         let startHeadRow = Math.divide(rows, 2);
         let snake = Snake.new(startHeadCol, startHeadRow);
 
-        let foodPosition = Grid.generateFood(cols, rows);
+        do Grid.generateFood(cols, rows);
+        let foodX = Grid.foodX();
+        let foodY = Grid.foodY();
+
         let headX = snake.headX();
         let headY = snake.headY();
 
         let score = 0;
+        do Output.moveCursor(0, 0);
         do Output.printString("Score: ");
         do Output.printInt(score);
 
+        return this;
+    }
+
+    method void dispose() {
+        do Memory.deAlloc(this);
         return;
     }
 
-    function void loop() {
-        while (true) {
+    method void run() {
+        var bool gameover;
+        let gameover = false;
+        while (~gameover) {
             let key = Keyboard.keyPressed();
             if (key=131) {
                 do snake.updateDirection(1);
@@ -46,17 +59,37 @@ class Game {
             }
             let headX = snake.headX();
             let headY = snake.headY();
-            if (foodPosition[0] = headX & foodPosition[1] = headY) {
-                do snake.move(true);
-                let foodPosition = Grid.generateFood(cols, rows);
-                do Output.backSpace();
+            if ((foodX = headX) & (foodY = headY)) {
+                do Grid.generateFood(cols, rows);
+                let foodX = Grid.foodX();
+                let foodY = Grid.foodY();
+                do Output.moveCursor(0, 7);
                 let score = score + 1;
                 do Output.printInt(score);
+                do snake.move(true);
             } 
             else {
                 do snake.move(false);
             }
-            do Sys.wait(75);
+
+            let headX = snake.headX();
+            let headY = snake.headY();
+            let hitTail = snake.hitTail();
+            if ((hitTail) | (headX<0) | (headY<0) | (headX>cols) | (headY>rows)) {
+                let gameover = true;
+                do Screen.clearScreen();
+                do Output.moveCursor(8, 28);
+                do Output.printString("GAMEOVER");
+                do Output.moveCursor(10, 28);
+                do Output.printString("Score: ");
+                do Output.printInt(score);
+                do Output.moveCursor(12, 21);
+                do Output.printString("Press space to restart");
+                do Output.moveCursor(14, 24);
+                do Output.printString("Press esc to exit");
+                do snake.dispose();
+            }
+            do Sys.wait(100);
         }
         return;
     }

@@ -2,6 +2,7 @@ class Grid {
     static int cols, rows;
     static int size;
     static int border;
+    static int foodX, foodY;
 
     function void init() {
         let size = 8;
@@ -37,13 +38,19 @@ class Grid {
         return;
     }
 
-    function Array generateFood(int maxX, int maxY) {
-        var Array position;
+    function void generateFood(int maxX, int maxY) {
         var Random rand;
-        let position = Array.new(2);
-        let position[0] = Random.randRange(maxX);
-        let position[1] = Random.randRange(maxY);
-        do Grid.drawSquare(position[0], position[1], true);
-        return position;
+        let foodX = Random.randRange(maxX);
+        let foodY = Random.randRange(maxY);
+        do Grid.drawSquare(foodX, foodY, true);
+        return;
+    }
+
+    function int foodX() {
+        return foodX;
+    }
+
+    function int foodY() {
+        return foodY;
     }
 }
