@@ -5,25 +5,40 @@ import (
 	"unicode/utf8"
 )
 
+// ScanTokens is a split function for a Scanner that returns each token in a jack file.
 func ScanTokens(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	// Skip leading spaces.
+	var r rune
+	var width int
 	start := 0
-	// skip leading whitespace
-	for width := 0; start < len(data); start += width {
-		var r rune
+	for width = 0; start < len(data); start += width {
 		r, width = utf8.DecodeRune(data[start:])
 		if !isSpace(r) {
 			break
 		}
 	}
-	// scan until space or symbol
-	for width, i := 0, start; i < len(data); i += width {
-		var r rune
-		r, width := utf8.DecodeRune(data[i:])
 
+	// NEED A WAY TO PARSE OUT COMMENTS AND PARSE OUT STRINGS
+
+	r, width = utf8.DecodeRune(data[start:])
+
+	if isSymbol(r) {
+		return start + width, data[start : start+width], nil
+	}
+
+	// Scan until space, marking end of word.
+	for width, i := 0, start; i < len(data); i += width {
+		r, width = utf8.DecodeRune(data[i:])
 		if isSpace(r) || isSymbol(r) {
-			return i + width, data[start:i], nil
+			return i, data[start:i], nil
 		}
 	}
+	// If we're at EOF, we have a final, non-empty, non-terminated word. Return it.
+	if atEOF && len(data) > start {
+		return len(data), data[start:], nil
+	}
+	// Request more data.
+	return start, nil, nil
 }
 
 func removeComment(data []byte) []byte {
