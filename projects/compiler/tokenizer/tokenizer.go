@@ -7,74 +7,6 @@ import (
 	"unicode/utf8"
 )
 
-func isKeyword(token string) bool {
-	keywords := []string{
-		"class",
-		"method",
-		"function",
-		"constructor",
-		"int",
-		"boolean",
-		"char",
-		"void",
-		"var",
-		"static",
-		"field",
-		"let",
-		"do",
-		"if",
-		"else",
-		"while",
-		"return",
-		"true",
-		"false",
-		"null",
-		"this",
-	}
-
-	for _, keyword := range keywords {
-		if token == keyword {
-			return true
-		}
-	}
-
-	return false
-}
-
-func isInt(token string) bool {
-	if _, err := strconv.Atoi(token); err == nil {
-		return true
-	}
-	return false
-}
-
-func isIdentifier(token string) bool {
-	if isInt(string(token[0])) {
-		return false
-	}
-	for _, char := range token {
-		if !unicode.IsDigit(char) && !unicode.IsLetter(char) && char != '_' {
-			return false
-		}
-	}
-	return true
-}
-
-func TokenType(token string) string {
-	if isKeyword(token) {
-		return "KEYWORD"
-	} else if isSymbol(rune(token[0])) {
-		return "SYMBOL"
-	} else if isStringConstant(rune(token[0])) {
-		return "STRING_CONST"
-	} else if isInt(token) {
-		return "INT_CONST"
-	} else if isIdentifier(token) {
-		return "IDENTIFIER"
-	}
-	return ""
-}
-
 func removeComment(data []byte) (bool, int) {
 	var width int
 	if string(data[:2]) == "//" {
@@ -164,4 +96,103 @@ func ScanTokens(data []byte, atEOF bool) (advance int, token []byte, err error) 
 
 	// Request more data.
 	return start, nil, nil
+}
+
+func isKeyword(token string) bool {
+	keywords := []string{
+		"class",
+		"method",
+		"function",
+		"constructor",
+		"int",
+		"boolean",
+		"char",
+		"void",
+		"var",
+		"static",
+		"field",
+		"let",
+		"do",
+		"if",
+		"else",
+		"while",
+		"return",
+		"true",
+		"false",
+		"null",
+		"this",
+	}
+
+	for _, keyword := range keywords {
+		if token == keyword {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isInt(token string) bool {
+	if _, err := strconv.Atoi(token); err == nil {
+		return true
+	}
+	return false
+}
+
+func isIdentifier(token string) bool {
+	if isInt(string(token[0])) {
+		return false
+	}
+	for _, char := range token {
+		if !unicode.IsDigit(char) && !unicode.IsLetter(char) && char != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func TokenType(token string) string {
+	if isKeyword(token) {
+		return "KEYWORD"
+	} else if isSymbol(rune(token[0])) {
+		return "SYMBOL"
+	} else if isStringConstant(rune(token[0])) {
+		return "STRING_CONST"
+	} else if isInt(token) {
+		return "INT_CONST"
+	} else if isIdentifier(token) {
+		return "IDENTIFIER"
+	}
+	return ""
+}
+
+func Keyword(token string) (updatedToken string, label string) {
+	return token, "keyword"
+}
+
+func Symbol(token string) (updatedToken string, label string) {
+	switch token {
+	case "<":
+		token = "&lt;"
+	case ">":
+		token = "&gt;"
+	case "&":
+		token = "&amp;"
+	case `"`:
+		token = "&quot;"
+	}
+	return token, "symbol"
+}
+
+func StringConst(token string) (updatedToken string, label string) {
+	token = token[1 : len(token)-1]
+	return token, "stringConstant"
+}
+
+func IntegerConst(token string) (updatedToken string, label string) {
+	return token, "integerConstant"
+}
+
+func Identifier(token string) (updatedToken string, label string) {
+	return token, "identifier"
 }
