@@ -151,7 +151,7 @@ func isIdentifier(token string) bool {
 	return true
 }
 
-func TokenType(token string) string {
+func tokenType(token string) string {
 	if isKeyword(token) {
 		return "KEYWORD"
 	} else if isSymbol(rune(token[0])) {
@@ -166,11 +166,11 @@ func TokenType(token string) string {
 	return ""
 }
 
-func Keyword(token string) (updatedToken string, label string) {
-	return token, "keyword"
+func keyword(token string) (updatedToken string) {
+	return token
 }
 
-func Symbol(token string) (updatedToken string, label string) {
+func symbol(token string) (updatedToken string) {
 	switch token {
 	case "<":
 		token = "&lt;"
@@ -181,18 +181,41 @@ func Symbol(token string) (updatedToken string, label string) {
 	case `"`:
 		token = "&quot;"
 	}
-	return token, "symbol"
+	return token
 }
 
-func StringConst(token string) (updatedToken string, label string) {
+func stringConst(token string) (updatedToken string) {
 	token = token[1 : len(token)-1]
-	return token, "stringConstant"
+	return token
 }
 
-func IntegerConst(token string) (updatedToken string, label string) {
-	return token, "integerConstant"
+func integerConst(token string) (updatedToken string) {
+	return token
 }
 
-func Identifier(token string) (updatedToken string, label string) {
-	return token, "identifier"
+func identifier(token string) (updatedToken string) {
+	return token
+}
+
+func ParseToken(token string) (string, string) {
+	tokenType := tokenType(token)
+	switch tokenType {
+	case "KEYWORD":
+		token := keyword(token)
+		return token, tokenType
+	case "SYMBOL":
+		token := symbol(token)
+		return token, tokenType
+	case "STRING_CONST":
+		token := stringConst(token)
+		return token, tokenType
+	case "INTEGER_CONST":
+		token := integerConst(token)
+		return token, tokenType
+	case "IDENTIFIER":
+		token := identifier(token)
+		return token, tokenType
+	default:
+		return "", ""
+	}
 }
