@@ -3,9 +3,8 @@ package compiler
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
-	"os"
-	"strings"
 )
 
 // Engine consists of a scanner that steps through the tokens in a jack file,
@@ -17,38 +16,9 @@ type Engine struct {
 }
 
 // NewEngine creates an engine to process a file from the given path
-func NewEngine(path string) *Engine {
-	outPath := strings.Replace(path, ".jack", "(gen).xml", 1)
-	outFile, err := os.Create(outPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() {
-		if err := outFile.Close(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	w := bufio.NewWriter(outFile)
-	defer func() {
-		if err := w.Flush(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	file, err := os.Open(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
+func NewEngine(r io.Reader, w *bufio.Writer) *Engine {
 	// Create output xml file
-
-	scanner := newScanner(file)
+	scanner := newScanner(r)
 	return &Engine{
 		scanner: scanner,
 		output:  w,
@@ -59,17 +29,22 @@ func NewEngine(path string) *Engine {
 // and sets the engines token
 func (e *Engine) advance() {
 	e.scanner.Scan()
-	token, err := newToken(e.scanner.Text())
+	tokenValue := e.scanner.Text()
+	token, err := newToken(tokenValue)
 	if err != nil {
 		log.Fatalf("Invalid token: %s", token.value)
 	}
 	e.token = token
 }
 
+func (e *Engine) writeString(s string) {
+	e.output.WriteString(s)
+}
+
 // writeToken writes the current token to the output file
 func (e *Engine) writeToken() {
 	var label string
-	switch e.token.tokenType {
+	switch e.tokenType() {
 	case keyword:
 		label = "keyword"
 	case symbol:
@@ -81,253 +56,512 @@ func (e *Engine) writeToken() {
 	case identifier:
 		label = "identifier"
 	}
-	e.output.WriteString(fmt.Sprintf("<%s>%s</%s>\n", label, e.token.value, label))
+	e.output.WriteString(fmt.Sprintf("<%s>%s</%s>\n", label, e.tokenValue(), label))
+}
+
+func (e *Engine) tokenValue() string {
+	return e.token.value
+}
+
+func (e *Engine) tokenType() tokenType {
+	return e.token.tokenType
+}
+
+func (e *Engine) tokenIsType() bool {
+	return e.token.isType()
 }
 
 // CompileClass will translate the jack file on the engine to an xml
 func (e *Engine) CompileClass() {
-	e.output.WriteString("<class>\n")
+	e.writeString("<class>\n")
 
 	// Scan through tokens ensuring the grammar specification is met, if not throw an error
 	e.advance()
-	if e.token.value == "class" {
+	if e.tokenValue() == "class" {
 		e.writeToken()
 	} else {
 		log.Fatal("invalid class grammar")
 	}
 
 	e.advance()
-	if e.token.tokenType == identifier {
+	if e.tokenType() == identifier {
 		e.writeToken()
 	} else {
 		log.Fatal("invalid class grammar")
 	}
 
 	e.advance()
-	if e.token.value == "{" {
+	if e.tokenValue() == "{" {
 		e.writeToken()
 	} else {
 		log.Fatal("invalid class grammar")
 	}
 
-	e.advance()
 	e.compileClassVarDec()
-
 	e.compileSubroutine()
 
-	if e.token.value == "}" {
+	if e.tokenValue() == "}" {
 		e.writeToken()
 	} else {
 		log.Fatal("incorrect class grammar")
 	}
-	e.output.WriteString("</class>\n")
+	e.writeString("</class>\n")
+}
+
+func (e *Engine) handleMultipleVarDecs() {
+	e.advance()
+	if e.tokenValue() == "," {
+		e.writeToken()
+	} else {
+		return
+	}
+
+	e.advance()
+	if e.tokenType() == identifier {
+		e.writeToken()
+		e.handleMultipleVarDecs()
+	} else {
+		log.Fatal("invalid grammar for declaring multiple variables on the same line")
+	}
 }
 
 func (e *Engine) compileClassVarDec() {
-	for {
-		switch e.token.value {
-		case "static", "field":
-			e.output.WriteString("<classVarDec>\n")
-			e.writeToken()
-		default:
-			break
-		}
+	e.advance()
+	switch e.tokenValue() {
+	case "static", "field":
+		e.writeString("<classVarDec>\n")
+		e.writeToken()
 
 		e.advance()
-		if e.token.isType() {
+		if e.tokenIsType() {
 			e.writeToken()
 		} else {
 			log.Fatal("invalid classVarDec grammar")
 		}
 
 		e.advance()
-		if e.token.tokenType == identifier {
+		if e.tokenType() == identifier {
 			e.writeToken()
 		} else {
 			log.Fatal("invalid classVarDec grammer")
 		}
 
-		for {
-			e.advance()
-			if e.token.value == ";" {
-				e.writeToken()
-				e.output.WriteString("</classVarDec>\n")
-				e.advance()
-				break
-			} else if e.token.value == "," {
-				e.writeToken()
-			} else {
-				log.Fatal("invalid classVarDec grammar")
-			}
+		e.handleMultipleVarDecs()
 
-			e.advance()
-			if e.token.tokenType == identifier {
-				e.writeToken()
-			} else {
-				log.Fatal("invalid classVarDec grammar")
-			}
+		if e.tokenValue() == ";" {
+			e.writeToken()
+			e.writeString("</classVarDec>\n")
+			e.compileClassVarDec()
+		} else {
+			log.Fatal("invalid classVarDec grammar")
 		}
+	default:
+		return
 	}
 }
 
 func (e *Engine) compileSubroutine() {
-	for {
-		switch e.token.value {
-		case "constructor", "function", "method":
-			e.output.WriteString("<subroutineDec>\n")
-			e.writeToken()
-		default:
-			break
-		}
+	switch e.tokenValue() {
+	case "constructor", "function", "method":
+		e.writeString("<subroutineDec>\n")
+		e.writeToken()
 
 		e.advance()
-		if e.token.isType() || e.token.value == "void" {
+		if e.tokenIsType() || e.tokenValue() == "void" {
 			e.writeToken()
 		} else {
 			log.Fatal("invalid subroutineDec grammar")
 		}
 
 		e.advance()
-		if e.token.tokenType == identifier {
+		if e.tokenType() == identifier {
 			e.writeToken()
 		} else {
 			log.Fatal("invalid subroutineDec grammar")
 		}
 
 		e.advance()
-		if e.token.value == "(" {
+		if e.tokenValue() == "(" {
 			e.writeToken()
 		} else {
 			log.Fatal("invalid subroutineDec grammar")
 		}
 
-		e.advance()
 		e.compileParameterList()
 
-		if e.token.value == ")" {
+		if e.tokenValue() == ")" {
 			e.writeToken()
 		} else {
 			log.Fatal("invalid subroutineDec grammar")
 		}
 
-		e.advance()
 		e.compileSubroutineBody()
 
 		e.advance()
+		e.compileSubroutine()
+	default:
+		return
 	}
 }
 
-func (e *Engine) compileParameterList() {
-	e.output.WriteString("<parameterList>\n")
-	// handle case of an empty parameter list
-	if e.token.value == ")" {
-		e.output.WriteString("</parameterList>\n")
+func (e *Engine) handleMultipleParameters() {
+	e.advance()
+	if e.tokenValue() == "," {
+		e.writeToken()
+	} else {
 		return
 	}
 
-	if e.token.isType() {
+	e.advance()
+	if e.tokenIsType() {
 		e.writeToken()
 	} else {
 		log.Fatal("invalid parameterList grammer")
 	}
 
 	e.advance()
-	if e.token.tokenType == identifier {
+	if e.tokenType() == identifier {
+		e.writeToken()
+		e.handleMultipleVarDecs()
+	} else {
+		log.Fatal("invalid parameterList grammar")
+	}
+}
+
+func (e *Engine) compileParameterList() {
+	e.advance()
+	e.writeString("<parameterList>\n")
+	// handle case of an empty parameter list
+	if e.tokenValue() == ")" {
+		e.writeString("</parameterList>\n")
+		return
+	}
+
+	if e.tokenIsType() {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid parameterList grammer")
+	}
+
+	e.advance()
+	if e.tokenType() == identifier {
 		e.writeToken()
 	} else {
 		log.Fatal("invalid parameterList grammar")
 	}
 
-	for {
-		e.advance()
-		if e.token.value == "," {
-			e.writeToken()
-		} else if e.token.value == ")" {
-			e.output.WriteString("</parameterList>\n")
-			break
-		} else {
-			log.Fatal("invalid parameterList grammar")
-		}
-
-		e.advance()
-		if e.token.isType() {
-			e.writeToken()
-		} else {
-			log.Fatal("invalid parameterList grammer")
-		}
-
-		e.advance()
-		if e.token.tokenType == identifier {
-			e.writeToken()
-		} else {
-			log.Fatal("invalid parameterList grammar")
-		}
-	}
+	e.handleMultipleParameters()
 }
 
 func (e *Engine) compileSubroutineBody() {
-	e.output.WriteString("<subroutineBody>\n")
-	if e.token.value == "{" {
+	e.advance()
+	e.writeString("<subroutineBody>\n")
+	if e.tokenValue() == "{" {
 		e.writeToken()
 	} else {
 		log.Fatal("invalid subroutineBody grammar")
 	}
 
-	e.advance()
 	e.compileVarDec()
-
 	e.compileStatements()
 
-	if e.token.value == "}" {
+	if e.tokenValue() == "}" {
 		e.writeToken()
 	} else {
 		log.Fatal("invalid subroutineBodyGrammar")
 	}
-	e.output.WriteString("</subroutineBody>\n")
+	e.writeString("</subroutineBody>\n")
 }
 
 func (e *Engine) compileVarDec() {
-	for {
-		if e.token.value == "var" {
-			e.output.WriteString("<varDec>\n")
-			e.writeToken()
-		} else {
-			break
-		}
-
-		e.advance()
-		if e.token.isType() {
-			e.writeToken()
-		} else {
-			log.Fatal("invalid varDec grammar")
-		}
-
-		e.advance()
-		if e.token.tokenType == identifier {
-			e.writeToken()
-		} else {
-			log.Fatal("invalid varDec grammar")
-		}
-
-		for {
-			e.advance()
-			if e.token.value == ";" {
-				e.writeToken()
-				e.output.WriteString("</varDec>\n")
-				e.advance()
-				break
-			} else if e.token.value == "," {
-				e.writeToken()
-			} else {
-				log.Fatal("invalid varDec grammar")
-			}
-
-			e.advance()
-			if e.token.tokenType == identifier {
-				e.writeToken()
-			} else {
-				log.Fatal("invalid varDec grammar")
-			}
-		}
+	e.advance()
+	if e.tokenValue() == "var" {
+		e.writeString("<varDec>\n")
+		e.writeToken()
+	} else {
+		return
 	}
+
+	e.advance()
+	if e.tokenIsType() {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid varDec grammar")
+	}
+
+	e.advance()
+	if e.tokenType() == identifier {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid varDec grammar")
+	}
+
+	e.handleMultipleVarDecs()
+
+	if e.tokenValue() == ";" {
+		e.writeToken()
+		e.writeString("</varDec>\n")
+		e.compileVarDec()
+	} else {
+		log.Fatal("invalid varDec grammar")
+	}
+}
+
+func (e *Engine) compileStatements() {
+	e.writeString("<statements>\n")
+	switch e.tokenValue() {
+	case "let":
+		e.compileLet()
+		e.advance()
+		e.compileStatements()
+	case "if":
+		e.compileIf()
+		e.compileStatements()
+	case "while":
+		e.compileWhile()
+		e.advance()
+		e.compileStatements()
+	case "do":
+		e.compileDo()
+		e.advance()
+		e.compileStatements()
+	case "return":
+		e.compileReturn()
+		e.advance()
+		e.compileStatements()
+	default:
+		e.writeString("</statements>\n")
+		return
+	}
+}
+
+func (e *Engine) compileLet() {
+	e.writeString("<letStatement>\n")
+	e.writeToken()
+
+	e.advance()
+	if e.tokenType() == identifier {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid letStatement grammar")
+	}
+
+	e.advance()
+	switch e.tokenValue() {
+	case "[":
+		e.writeToken()
+
+		e.advance()
+		e.compileExpression()
+
+		// DO I NEED TO ADVANCE HERE
+		e.advance()
+		if e.tokenValue() == "]" {
+			e.writeToken()
+		} else {
+			log.Fatal("invalid letStatement grammar")
+		}
+
+		e.advance()
+		if e.tokenValue() == "=" {
+			e.writeToken()
+		} else {
+			log.Fatal("invalid letStatement grammar")
+		}
+
+		e.advance()
+		e.compileExpression()
+
+		e.advance()
+		if e.tokenValue() == ";" {
+			e.writeToken()
+			e.writeString("</letStatement>\n")
+		} else {
+			log.Fatal("invalid letStatement grammar")
+		}
+	case "=":
+		e.writeToken()
+
+		e.advance()
+		e.compileExpression()
+
+		e.advance()
+		if e.tokenValue() == ";" {
+			e.writeToken()
+			e.writeString("</letStatement>\n")
+		} else {
+			log.Fatal("invalid letStatement grammar")
+		}
+	default:
+		log.Fatal("invalid letStatement grammar")
+	}
+}
+
+func (e *Engine) handleStatements() {
+	e.advance()
+	if e.tokenValue() == "{" {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid grammar")
+	}
+
+	e.advance()
+	e.compileStatements()
+
+	if e.tokenValue() == "}" {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid grammar")
+	}
+}
+
+func (e *Engine) handleExpressionStatements() {
+	e.advance()
+	if e.tokenValue() == "(" {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid grammar")
+	}
+
+	e.advance()
+	e.compileExpression()
+
+	e.advance()
+	if e.tokenValue() == ")" {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid grammar")
+	}
+
+	e.handleStatements()
+}
+
+func (e *Engine) compileIf() {
+	e.writeString("<ifStatement>\n")
+	e.writeToken()
+
+	e.handleExpressionStatements()
+
+	e.advance()
+	if e.tokenValue() == "else" {
+		e.writeToken()
+
+		e.handleStatements()
+	}
+
+	e.writeString("</ifStatement>\n")
+}
+
+func (e *Engine) compileWhile() {
+	e.writeString("<whileStatement>\n")
+	e.writeToken()
+
+	e.handleExpressionStatements()
+
+	e.writeString("</whileStatement>\n")
+}
+
+func (e *Engine) compileDo() {
+	e.writeString("<doStatement>\n")
+	e.writeToken()
+
+	e.compileSubroutineCall()
+
+	e.advance()
+	if e.tokenValue() == ";" {
+		e.writeToken()
+		e.writeString("</doStatement>\n")
+	} else {
+		log.Fatal("invalid doStatement grammar")
+	}
+}
+
+func (e *Engine) compileReturn() {
+	e.writeString("<returnStatement>\n")
+	e.writeToken()
+
+	e.advance()
+	if e.tokenValue() == ";" {
+		e.writeToken()
+		e.writeString("</returnStatement>\n")
+		return
+	}
+	e.compileExpression()
+
+	e.advance()
+	if e.tokenValue() == ";" {
+		e.writeToken()
+		e.writeString("</returnStatement>\n")
+	} else {
+		log.Fatal("invalid returnStatement grammar")
+	}
+}
+
+func (e *Engine) compileExpression() {
+	e.writeString("<expression>\n")
+	e.compileTerm()
+	e.writeString("</expression>\n")
+}
+
+func (e *Engine) compileTerm() {
+	e.writeString("<term>\n")
+	e.writeToken()
+	e.writeString("</term>\n")
+}
+
+func (e *Engine) compileSubroutineCall() {
+	e.writeString("<subroutineCall>\n")
+	e.advance()
+	if e.tokenType() == identifier {
+		e.writeToken()
+	} else {
+		log.Fatal("invalid subroutineCall grammar")
+	}
+
+	e.advance()
+	if e.tokenValue() == "(" {
+		e.writeToken()
+
+		e.compileExpressionList()
+
+		e.advance()
+		if e.tokenValue() == ")" {
+			e.writeToken()
+		} else {
+			log.Fatal("invalid subroutineCall grammar")
+		}
+	} else if e.tokenValue() == "." {
+		e.writeToken()
+
+		e.advance()
+		if e.tokenType() == identifier {
+			e.writeToken()
+		} else {
+			log.Fatal("invalid subroutineCall grammar")
+		}
+
+		e.advance()
+		if e.tokenValue() == "(" {
+			e.writeToken()
+		} else {
+			log.Fatal("invalid subroutineCall grammar")
+		}
+
+		e.compileExpressionList()
+
+		e.advance()
+		if e.tokenValue() == ")" {
+			e.writeToken()
+		} else {
+			log.Fatal("invalid subroutineCall grammar")
+		}
+	} else {
+		log.Fatal("invalid subroutineCall grammar")
+	}
+	e.writeString("</subroutineCall>\n")
+}
+
+func (e *Engine) compileExpressionList() {
+	e.writeString("<expressionList>\n")
+	e.writeString("</expressionList>\n")
 }
