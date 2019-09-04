@@ -151,16 +151,37 @@ func (t *token) isType() bool {
 		return true
 	}
 
-	types := []string{
-		"int",
-		"char",
-		"boolean",
+	switch t.value {
+	case "int", "char", "boolean":
+		return true
+	default:
+		return false
 	}
-	for _, jackType := range types {
-		if t.value == jackType {
-			return true
-		}
-	}
+}
 
-	return false
+func (t *token) isOp() bool {
+	switch t.value {
+	case "+", "-", "*", "/", "&", "|", "<", ">", "=":
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *token) isUnaryOp() bool {
+	switch t.value {
+	case "-", "~":
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *token) isKeywordConstant() bool {
+	switch t.value {
+	case "true", "false", "null", "this":
+		return true
+	default:
+		return false
+	}
 }

@@ -71,6 +71,10 @@ func (e *Engine) tokenIsType() bool {
 	return e.token.isType()
 }
 
+func (e *Engine) tokenIsOp() bool {
+	return e.token.isOp()
+}
+
 // CompileClass will translate the jack file on the engine to an xml
 func (e *Engine) CompileClass() {
 	e.writeString("<class>\n")
@@ -196,8 +200,8 @@ func (e *Engine) compileSubroutine() {
 		}
 
 		e.compileSubroutineBody()
+		e.writeString("</subroutineDec>\n")
 
-		e.advance()
 		e.compileSubroutine()
 	default:
 		return
@@ -222,7 +226,7 @@ func (e *Engine) handleMultipleParameters() {
 	e.advance()
 	if e.tokenType() == identifier {
 		e.writeToken()
-		e.handleMultipleVarDecs()
+		e.handleMultipleParameters()
 	} else {
 		log.Fatal("invalid parameterList grammar")
 	}
@@ -251,6 +255,7 @@ func (e *Engine) compileParameterList() {
 	}
 
 	e.handleMultipleParameters()
+	e.writeString("</parameterList>\n")
 }
 
 func (e *Engine) compileSubroutineBody() {
@@ -270,7 +275,9 @@ func (e *Engine) compileSubroutineBody() {
 	} else {
 		log.Fatal("invalid subroutineBodyGrammar")
 	}
+
 	e.writeString("</subroutineBody>\n")
+	e.advance()
 }
 
 func (e *Engine) compileVarDec() {
@@ -309,28 +316,28 @@ func (e *Engine) compileVarDec() {
 
 func (e *Engine) compileStatements() {
 	e.writeString("<statements>\n")
+	e.compileStatement()
+	e.writeString("</statements>\n")
+}
+
+func (e *Engine) compileStatement() {
 	switch e.tokenValue() {
 	case "let":
 		e.compileLet()
-		e.advance()
-		e.compileStatements()
+		e.compileStatement()
 	case "if":
 		e.compileIf()
-		e.compileStatements()
+		e.compileStatement()
 	case "while":
 		e.compileWhile()
-		e.advance()
-		e.compileStatements()
+		e.compileStatement()
 	case "do":
 		e.compileDo()
-		e.advance()
-		e.compileStatements()
+		e.compileStatement()
 	case "return":
 		e.compileReturn()
-		e.advance()
-		e.compileStatements()
+		e.compileStatement()
 	default:
-		e.writeString("</statements>\n")
 		return
 	}
 }
@@ -354,8 +361,6 @@ func (e *Engine) compileLet() {
 		e.advance()
 		e.compileExpression()
 
-		// DO I NEED TO ADVANCE HERE
-		e.advance()
 		if e.tokenValue() == "]" {
 			e.writeToken()
 		} else {
@@ -372,10 +377,10 @@ func (e *Engine) compileLet() {
 		e.advance()
 		e.compileExpression()
 
-		e.advance()
 		if e.tokenValue() == ";" {
 			e.writeToken()
 			e.writeString("</letStatement>\n")
+			e.advance()
 		} else {
 			log.Fatal("invalid letStatement grammar")
 		}
@@ -385,10 +390,10 @@ func (e *Engine) compileLet() {
 		e.advance()
 		e.compileExpression()
 
-		e.advance()
 		if e.tokenValue() == ";" {
 			e.writeToken()
 			e.writeString("</letStatement>\n")
+			e.advance()
 		} else {
 			log.Fatal("invalid letStatement grammar")
 		}
@@ -402,7 +407,7 @@ func (e *Engine) handleStatements() {
 	if e.tokenValue() == "{" {
 		e.writeToken()
 	} else {
-		log.Fatal("invalid grammar")
+		log.Fatal("invalid handleStatements grammar")
 	}
 
 	e.advance()
@@ -410,8 +415,9 @@ func (e *Engine) handleStatements() {
 
 	if e.tokenValue() == "}" {
 		e.writeToken()
+		e.advance()
 	} else {
-		log.Fatal("invalid grammar")
+		log.Fatal("invalid handleStatements grammar")
 	}
 }
 
@@ -420,17 +426,16 @@ func (e *Engine) handleExpressionStatements() {
 	if e.tokenValue() == "(" {
 		e.writeToken()
 	} else {
-		log.Fatal("invalid grammar")
+		log.Fatal("invalid handleExpressionStatements grammar")
 	}
 
 	e.advance()
 	e.compileExpression()
 
-	e.advance()
 	if e.tokenValue() == ")" {
 		e.writeToken()
 	} else {
-		log.Fatal("invalid grammar")
+		log.Fatal("invalid handleExpressionStatements grammar")
 	}
 
 	e.handleStatements()
@@ -442,7 +447,6 @@ func (e *Engine) compileIf() {
 
 	e.handleExpressionStatements()
 
-	e.advance()
 	if e.tokenValue() == "else" {
 		e.writeToken()
 
@@ -450,6 +454,7 @@ func (e *Engine) compileIf() {
 	}
 
 	e.writeString("</ifStatement>\n")
+
 }
 
 func (e *Engine) compileWhile() {
@@ -471,6 +476,7 @@ func (e *Engine) compileDo() {
 	if e.tokenValue() == ";" {
 		e.writeToken()
 		e.writeString("</doStatement>\n")
+		e.advance()
 	} else {
 		log.Fatal("invalid doStatement grammar")
 	}
@@ -484,22 +490,38 @@ func (e *Engine) compileReturn() {
 	if e.tokenValue() == ";" {
 		e.writeToken()
 		e.writeString("</returnStatement>\n")
+		e.advance()
 		return
 	}
 	e.compileExpression()
 
-	e.advance()
 	if e.tokenValue() == ";" {
 		e.writeToken()
 		e.writeString("</returnStatement>\n")
+		e.advance()
 	} else {
 		log.Fatal("invalid returnStatement grammar")
 	}
 }
 
+func (e *Engine) handleMultipleTerms() {
+	e.advance()
+	if e.tokenIsOp() {
+		e.writeToken()
+	} else {
+		return
+	}
+
+	e.advance()
+	e.compileTerm()
+
+	e.handleMultipleTerms()
+}
+
 func (e *Engine) compileExpression() {
 	e.writeString("<expression>\n")
 	e.compileTerm()
+	e.handleMultipleTerms()
 	e.writeString("</expression>\n")
 }
 
@@ -510,7 +532,6 @@ func (e *Engine) compileTerm() {
 }
 
 func (e *Engine) compileSubroutineCall() {
-	e.writeString("<subroutineCall>\n")
 	e.advance()
 	if e.tokenType() == identifier {
 		e.writeToken()
@@ -524,7 +545,6 @@ func (e *Engine) compileSubroutineCall() {
 
 		e.compileExpressionList()
 
-		e.advance()
 		if e.tokenValue() == ")" {
 			e.writeToken()
 		} else {
@@ -549,7 +569,6 @@ func (e *Engine) compileSubroutineCall() {
 
 		e.compileExpressionList()
 
-		e.advance()
 		if e.tokenValue() == ")" {
 			e.writeToken()
 		} else {
@@ -558,10 +577,32 @@ func (e *Engine) compileSubroutineCall() {
 	} else {
 		log.Fatal("invalid subroutineCall grammar")
 	}
-	e.writeString("</subroutineCall>\n")
+}
+
+func (e *Engine) handleMultipleExpressions() {
+	if e.tokenValue() == "," {
+		e.writeToken()
+	} else {
+		return
+	}
+
+	e.advance()
+	e.compileExpression()
+
+	e.handleMultipleExpressions()
 }
 
 func (e *Engine) compileExpressionList() {
+	e.advance()
 	e.writeString("<expressionList>\n")
+	if e.tokenValue() == ")" {
+		e.writeString("</expressionList>\n")
+		return
+	}
+
+	e.compileExpression()
+
+	e.handleMultipleExpressions()
+
 	e.writeString("</expressionList>\n")
 }
