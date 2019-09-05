@@ -161,7 +161,7 @@ func (t *token) isType() bool {
 
 func (t *token) isOp() bool {
 	switch t.value {
-	case "+", "-", "*", "/", "&", "|", "<", ">", "=":
+	case "+", "-", "*", "/", "&amp;", "|", "&lt;", "&gt;", "=":
 		return true
 	default:
 		return false

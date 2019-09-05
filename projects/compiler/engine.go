@@ -20,8 +20,9 @@ func NewEngine(r io.Reader, w *bufio.Writer) *Engine {
 	// Create output xml file
 	scanner := newScanner(r)
 	return &Engine{
-		scanner: scanner,
-		output:  w,
+		scanner,
+		w,
+		&token{},
 	}
 }
 
@@ -73,6 +74,10 @@ func (e *Engine) tokenIsType() bool {
 
 func (e *Engine) tokenIsOp() bool {
 	return e.token.isOp()
+}
+
+func (e *Engine) tokenIsUnaryOp() bool {
+	return e.token.isUnaryOp()
 }
 
 // CompileClass will translate the jack file on the engine to an xml
@@ -505,7 +510,6 @@ func (e *Engine) compileReturn() {
 }
 
 func (e *Engine) handleMultipleTerms() {
-	e.advance()
 	if e.tokenIsOp() {
 		e.writeToken()
 	} else {
@@ -527,8 +531,93 @@ func (e *Engine) compileExpression() {
 
 func (e *Engine) compileTerm() {
 	e.writeString("<term>\n")
-	e.writeToken()
-	e.writeString("</term>\n")
+	if e.tokenType() == intConst || e.tokenType() == stringConst || e.tokenType() == keyword {
+		e.writeToken()
+		e.writeString("</term>\n")
+		e.advance()
+	} else if e.tokenType() == identifier {
+		e.writeToken()
+
+		e.advance()
+		if e.tokenValue() == "[" {
+			e.writeToken()
+			e.advance()
+			e.compileExpression()
+
+			if e.tokenValue() == "]" {
+				e.writeToken()
+			} else {
+				log.Fatal("invalid term grammar")
+			}
+
+			e.advance()
+			e.writeString("</term>\n")
+		} else if e.tokenValue() == "(" {
+			e.writeToken()
+
+			e.compileExpressionList()
+
+			if e.tokenValue() == ")" {
+				e.writeToken()
+			} else {
+				log.Fatal("invalid subroutineCall grammar")
+			}
+
+			e.advance()
+			e.writeString("</term>\n")
+		} else if e.tokenValue() == "." {
+			e.writeToken()
+
+			e.advance()
+			if e.tokenType() == identifier {
+				e.writeToken()
+			} else {
+				log.Fatal("invalid subroutineCall grammar")
+			}
+
+			e.advance()
+			if e.tokenValue() == "(" {
+				e.writeToken()
+			} else {
+				log.Fatal("invalid subroutineCall grammar")
+			}
+
+			e.compileExpressionList()
+
+			if e.tokenValue() == ")" {
+				e.writeToken()
+			} else {
+				log.Fatal("invalid subroutineCall grammar")
+			}
+
+			e.advance()
+			e.writeString("</term>\n")
+		} else {
+			e.writeString("</term>\n")
+			return
+		}
+	} else if e.tokenValue() == "(" {
+		e.writeToken()
+
+		e.advance()
+		e.compileExpression()
+
+		if e.tokenValue() == ")" {
+			e.writeToken()
+		} else {
+			log.Fatal("invalid term grammar")
+		}
+
+		e.advance()
+		e.writeString("</term>\n")
+	} else if e.tokenIsUnaryOp() {
+		e.writeToken()
+
+		e.advance()
+		e.compileTerm()
+
+		e.writeString("</term>\n")
+	}
 }
 
 func (e *Engine) compileSubroutineCall() {
