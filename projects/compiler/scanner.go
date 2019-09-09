@@ -3,21 +3,198 @@ package compiler
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
+	"log"
+	"strconv"
+	"unicode"
 	"unicode/utf8"
 )
 
+type category uint8
+
+// Defined the possible token categories
+const (
+	unknown category = iota
+	keyword
+	symbol
+	stringConst
+	intConst
+	identifier
+)
+
+// Below are functions used to check if a token belongs to a category according to the Jack grammar
+// specification.
+func isKeyword(token string) bool {
+	keywords := []string{
+		"class",
+		"method",
+		"function",
+		"constructor",
+		"int",
+		"boolean",
+		"char",
+		"void",
+		"var",
+		"static",
+		"field",
+		"let",
+		"do",
+		"if",
+		"else",
+		"while",
+		"return",
+		"true",
+		"false",
+		"null",
+		"this",
+	}
+
+	for _, keyword := range keywords {
+		if token == keyword {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isSymbol(token string) bool {
+	switch token {
+	case "{", "}", "(", ")", "[", "]", ".", ",", ";", "+", "-", "*", "/", "&", "|", "<", ">", "=", "~":
+		return true
+	}
+	return false
+}
+
+func isStringConstant(token string) bool {
+	return string(token[0]) == `"`
+}
+
+func isIntConstant(token string) bool {
+	if _, err := strconv.Atoi(token); err == nil {
+		return true
+	}
+	return false
+}
+
+func isIdentifier(token string) bool {
+	if isIntConstant(string(token[0])) {
+		return false
+	}
+	for _, char := range token {
+		if !unicode.IsDigit(char) && !unicode.IsLetter(char) && char != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func tokenCategory(token string) category {
+	if isKeyword(token) {
+		return keyword
+	} else if isSymbol(token) {
+		return symbol
+	} else if isStringConstant(token) {
+		return stringConst
+	} else if isIntConstant(token) {
+		return intConst
+	} else if isIdentifier(token) {
+		return identifier
+	}
+	return unknown
+}
+
+func formatSymbol(token string) (updatedToken string) {
+	switch token {
+	case "<":
+		token = "&lt;"
+	case ">":
+		token = "&gt;"
+	case "&":
+		token = "&amp;"
+	case `"`:
+		token = "&quot;"
+	}
+	return token
+}
+
+func formatStringConst(token string) (updatedToken string) {
+	token = token[1 : len(token)-1]
+	return token
+}
+
+type token struct {
+	value    string
+	category category
+}
+
+func newToken(tokenValue string) (*token, error) {
+	category := tokenCategory(tokenValue)
+	switch category {
+	case keyword:
+		return &token{tokenValue, category}, nil
+	case symbol:
+		tokenValue := formatSymbol(tokenValue)
+		return &token{tokenValue, category}, nil
+	case stringConst:
+		tokenValue := formatStringConst(tokenValue)
+		return &token{tokenValue, category}, nil
+	case intConst:
+		return &token{tokenValue, category}, nil
+	case identifier:
+		return &token{tokenValue, category}, nil
+	}
+	// return an error here if the token is unknown
+	return &token{tokenValue, category}, fmt.Errorf("invalid token: %s", tokenValue)
+}
+
+func (t *token) isType() bool {
+	if t.category == identifier {
+		return true
+	}
+
+	switch t.value {
+	case "int", "char", "boolean":
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *token) isOp() bool {
+	switch t.value {
+	case "+", "-", "*", "/", "&amp;", "|", "&lt;", "&gt;", "=":
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *token) isUnaryOp() bool {
+	switch t.value {
+	case "-", "~":
+		return true
+	default:
+		return false
+	}
+}
+
+func (t *token) isKeywordConstant() bool {
+	switch t.value {
+	case "true", "false", "null", "this":
+		return true
+	default:
+		return false
+	}
+}
+
 type scanner struct {
 	*bufio.Scanner
+	token *token
 }
 
-func newScanner(file io.Reader) *scanner {
-	bufioScanner := bufio.NewScanner(file)
-	bufioScanner.Split(scanTokens)
-	return &scanner{bufioScanner}
-}
-
-func removeComment(data []byte) (bool, int) {
+func isComment(data []byte) (bool, int) {
 	var width int
 	if string(data[:2]) == "//" {
 		width = bytes.IndexByte(data, '\n') + 1
@@ -27,18 +204,6 @@ func removeComment(data []byte) (bool, int) {
 		return true, width
 	}
 	return false, -1
-}
-
-func isStringConstant(r rune) bool {
-	return r == '"'
-}
-
-func isSymbol(r rune) bool {
-	switch r {
-	case '{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '/', '&', '|', '<', '>', '=', '~':
-		return true
-	}
-	return false
 }
 
 // isSpace reports whether the character is a Unicode white space character.
@@ -74,8 +239,7 @@ func scanTokens(data []byte, atEOF bool) (advance int, token []byte, err error) 
 	// Skip leading spaces and comments.
 	for width = 0; start < len(data); start += width {
 		r, width = utf8.DecodeRune(data[start:])
-		// If the first 2 runes are // then find where the end of the line is and shift the start value
-		if isComment, commentWidth := removeComment(data[start:]); isComment {
+		if comment, commentWidth := isComment(data[start:]); comment {
 			width = commentWidth
 		} else if !isSpace(r) {
 			break
@@ -84,9 +248,9 @@ func scanTokens(data []byte, atEOF bool) (advance int, token []byte, err error) 
 
 	// If the first rune is a symbol or string constant return it
 	r, width = utf8.DecodeRune(data[start:])
-	if isSymbol(r) {
+	if isSymbol(string(r)) {
 		return start + width, data[start : start+width], nil
-	} else if isStringConstant(r) {
+	} else if isStringConstant(string(r)) {
 		constantEndIndex := bytes.IndexByte(data[start+1:], '"') + 2
 		return start + constantEndIndex, data[start : start+constantEndIndex], nil
 	}
@@ -94,7 +258,7 @@ func scanTokens(data []byte, atEOF bool) (advance int, token []byte, err error) 
 	// Scan until space or comment, marking end of word.
 	for width, i := 0, start; i < len(data); i += width {
 		r, width = utf8.DecodeRune(data[i:])
-		if isSpace(r) || isSymbol(r) {
+		if isSpace(r) || isSymbol(string(r)) {
 			return i, data[start:i], nil
 		}
 	}
@@ -106,4 +270,20 @@ func scanTokens(data []byte, atEOF bool) (advance int, token []byte, err error) 
 
 	// Request more data.
 	return start, nil, nil
+}
+
+func newScanner(file io.Reader) *scanner {
+	bufioScanner := bufio.NewScanner(file)
+	bufioScanner.Split(scanTokens)
+	return &scanner{bufioScanner, &token{}}
+}
+
+func (s *scanner) advance() {
+	s.Scan()
+	tokenValue := s.Text()
+	token, err := newToken(tokenValue)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s.token = token
 }
