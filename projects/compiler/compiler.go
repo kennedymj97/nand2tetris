@@ -10,47 +10,44 @@ import (
 	"strings"
 )
 
-// Compiler consists of a scanner that steps through the tokens in a jack file,
-// a bufio writer to produce the parsed file and a token to handle tokens.
-type Compiler struct {
+type compilationEngine struct {
 	scanner *scanner
 	output  *bufio.Writer
 }
 
-// NewCompiler creates an Compiler
-func NewCompiler(reader io.Reader, writer *bufio.Writer) *Compiler {
+func newCompilationEngine(reader io.Reader, writer *bufio.Writer) *compilationEngine {
 	scanner := newScanner(reader)
-	return &Compiler{
+	return &compilationEngine{
 		scanner,
 		writer,
 	}
 }
 
-func (c *Compiler) advance() {
+func (c *compilationEngine) advance() {
 	c.scanner.advance()
 }
 
-func (c *Compiler) tokenValue() string {
+func (c *compilationEngine) tokenValue() string {
 	return c.scanner.token.value
 }
 
-func (c *Compiler) tokenCategory() category {
+func (c *compilationEngine) tokenCategory() category {
 	return c.scanner.token.category
 }
 
-func (c *Compiler) tokenIsType() bool {
+func (c *compilationEngine) tokenIsType() bool {
 	return c.scanner.token.isType()
 }
 
-func (c *Compiler) tokenIsOp() bool {
+func (c *compilationEngine) tokenIsOp() bool {
 	return c.scanner.token.isOp()
 }
 
-func (c *Compiler) tokenIsUnaryOp() bool {
+func (c *compilationEngine) tokenIsUnaryOp() bool {
 	return c.scanner.token.isUnaryOp()
 }
 
-func (c *Compiler) writeToken() {
+func (c *compilationEngine) writeToken() {
 	var label string
 	switch c.tokenCategory() {
 	case keyword:
@@ -67,354 +64,31 @@ func (c *Compiler) writeToken() {
 	c.output.WriteString(fmt.Sprintf("<%s>%s</%s>\n", label, c.tokenValue(), label))
 }
 
-func (c *Compiler) writeTokenAndAdvance() {
+func (c *compilationEngine) writeTokenAndAdvance() {
 	c.writeToken()
 	c.advance()
 }
 
-func (c *Compiler) writeString(s string) {
+func (c *compilationEngine) writeString(s string) {
 	c.output.WriteString(s)
 }
 
-func (c *Compiler) checkTokenValue(tokenValue string, message string) {
+func (c *compilationEngine) compileTokenValue(tokenValue string) {
 	if c.tokenValue() == tokenValue {
 		c.writeTokenAndAdvance()
 	} else {
-		log.Fatal(message)
+		panic(fmt.Errorf(`expected token to have value "%s", got "%s"`, tokenValue, c.tokenValue()))
 	}
 }
 
-func (c *Compiler) checkTokenIdentifier(message string) {
-	if c.tokenCategory() == identifier {
-		c.writeTokenAndAdvance()
-	} else {
-		log.Fatal(message)
-	}
-}
-
-// CompileClass will translate the jack file on the Compiler to an xml
-func (c *Compiler) compileClass() {
-	errorMessage := "invalid class grammar"
-	c.writeString("<class>\n")
-	c.advance()
-	c.checkTokenValue("class", errorMessage)
-	c.checkTokenIdentifier(errorMessage)
-	c.checkTokenValue("{", errorMessage)
-	c.compileClassVarDec()
-	c.compileSubroutine()
-	if c.tokenValue() == "}" {
-		c.writeToken()
-	} else {
-		log.Fatal(errorMessage)
-	}
-	c.writeString("</class>\n")
-}
-
-func (c *Compiler) checkTokenIsType(message string) {
-	if c.tokenIsType() {
-		c.writeTokenAndAdvance()
-	} else {
-		log.Fatal(message)
-	}
-}
-
-func (c *Compiler) compileMultipleVarDecs(message string) {
-	if c.tokenValue() != "," {
-		return
-	}
-	c.writeTokenAndAdvance()
-	c.checkTokenIdentifier(message)
-	c.compileMultipleVarDecs(message)
-}
-
-func (c *Compiler) compileClassVarDec() {
-	errorMessage := "invalid classVarDec grammar"
-	if c.tokenValue() != "static" && c.tokenValue() != "field" {
-		return
-	}
-	c.writeString("<classVarDec>\n")
-	c.writeTokenAndAdvance()
-	c.checkTokenIsType(errorMessage)
-	c.checkTokenIdentifier(errorMessage)
-	c.compileMultipleVarDecs(errorMessage)
-	c.checkTokenValue(";", errorMessage)
-	c.writeString("</classVarDec>\n")
-	c.compileClassVarDec()
-}
-
-func (c *Compiler) compileSubroutine() {
-	if c.tokenValue() != "constructor" && c.tokenValue() != "function" && c.tokenValue() != "method" {
-		return
-	}
-	errorMessage := "invalid subroutineDec grammar"
-	c.writeString("<subroutineDec>\n")
-	c.writeTokenAndAdvance()
-	if c.tokenIsType() || c.tokenValue() == "void" {
-		c.writeTokenAndAdvance()
-	} else {
-		log.Fatal(errorMessage)
-	}
-	c.checkTokenIdentifier(errorMessage)
-	c.checkTokenValue("(", errorMessage)
-	c.compileParameterList()
-	c.checkTokenValue(")", errorMessage)
-	c.compileSubroutineBody()
-	c.writeString("</subroutineDec>\n")
-	c.compileSubroutine()
-}
-
-func (c *Compiler) handleMultipleParameters(message string) {
-	if c.tokenValue() != "," {
-		return
-	}
-	c.writeTokenAndAdvance()
-	c.checkTokenIsType(message)
-	c.checkTokenIdentifier(message)
-	c.handleMultipleParameters(message)
-}
-
-func (c *Compiler) compileParameterList() {
-	errorMessage := "invalid parameterList grammar"
-	c.writeString("<parameterList>\n")
-	if c.tokenValue() == ")" {
-		c.writeString("</parameterList>\n")
-		return
-	}
-	c.checkTokenIsType(errorMessage)
-	c.checkTokenIdentifier(errorMessage)
-	c.handleMultipleParameters(errorMessage)
-	c.writeString("</parameterList>\n")
-}
-
-func (c *Compiler) compileSubroutineBody() {
-	errorMessage := "invalid subroutineBody grammar"
-	c.writeString("<subroutineBody>\n")
-	c.checkTokenValue("{", errorMessage)
-	c.compileVarDec()
-	c.compileStatements()
-	c.checkTokenValue("}", errorMessage)
-	c.writeString("</subroutineBody>\n")
-}
-
-func (c *Compiler) compileVarDec() {
-	if c.tokenValue() != "var" {
-		return
-	}
-	errorMessage := "invalid varDec grammar"
-	c.writeString("<varDec>\n")
-	c.writeTokenAndAdvance()
-	c.checkTokenIsType(errorMessage)
-	c.checkTokenIdentifier(errorMessage)
-	c.compileMultipleVarDecs(errorMessage)
-	c.checkTokenValue(";", errorMessage)
-	c.writeString("</varDec>\n")
-	c.compileVarDec()
-}
-
-func (c *Compiler) compileStatements() {
-	c.writeString("<statements>\n")
-	c.compileStatement()
-	c.writeString("</statements>\n")
-}
-
-func (c *Compiler) compileStatement() {
-	switch c.tokenValue() {
-	case "let":
-		c.compileLet()
-		c.compileStatement()
-	case "if":
-		c.compileIf()
-		c.compileStatement()
-	case "while":
-		c.compileWhile()
-		c.compileStatement()
-	case "do":
-		c.compileDo()
-		c.compileStatement()
-	case "return":
-		c.compileReturn()
-		c.compileStatement()
-	default:
-		return
-	}
-}
-
-func (c *Compiler) compileLet() {
-	if c.tokenValue() != "let" {
-		return
-	}
-	errorMessage := "invalid letStatement grammar"
-	c.writeString("<letStatement>\n")
-	c.writeTokenAndAdvance()
-	c.checkTokenIdentifier(errorMessage)
-	switch c.tokenValue() {
-	case "[":
-		c.writeTokenAndAdvance()
-		c.compileExpression()
-		c.checkTokenValue("]", errorMessage)
-		c.checkTokenValue("=", errorMessage)
-		c.compileExpression()
-		c.checkTokenValue(";", errorMessage)
-		c.writeString("</letStatement>\n")
-	case "=":
-		c.writeTokenAndAdvance()
-		c.compileExpression()
-		c.checkTokenValue(";", errorMessage)
-		c.writeString("</letStatement>\n")
-	default:
-		log.Fatal(errorMessage)
-	}
-}
-
-func (c *Compiler) handleStatements(message string) {
-	c.checkTokenValue("{", message)
-	c.compileStatements()
-	c.checkTokenValue("}", message)
-}
-
-func (c *Compiler) handleExpressionStatements(message string) {
-	c.checkTokenValue("(", message)
-	c.compileExpression()
-	c.checkTokenValue(")", message)
-	c.handleStatements(message)
-}
-
-func (c *Compiler) compileIf() {
-	if c.tokenValue() != "if" {
-		return
-	}
-	errorMessage := "invalid if grammar"
-	c.writeString("<ifStatement>\n")
-	c.writeTokenAndAdvance()
-	c.handleExpressionStatements(errorMessage)
-	if c.tokenValue() == "else" {
-		c.writeTokenAndAdvance()
-		c.handleStatements(errorMessage)
-	}
-	c.writeString("</ifStatement>\n")
-}
-
-func (c *Compiler) compileWhile() {
-	if c.tokenValue() != "while" {
-		return
-	}
-	errorMessage := "invalid while grammar"
-	c.writeString("<whileStatement>\n")
-	c.writeTokenAndAdvance()
-	c.handleExpressionStatements(errorMessage)
-	c.writeString("</whileStatement>\n")
-}
-
-func (c *Compiler) compileDo() {
-	if c.tokenValue() != "do" {
-		return
-	}
-	errorMessage := "invalid do grammar"
-	c.writeString("<doStatement>\n")
-	c.writeTokenAndAdvance()
-	c.compileSubroutineCall()
-	c.checkTokenValue(";", errorMessage)
-	c.writeString("</doStatement>\n")
-}
-
-func (c *Compiler) compileReturn() {
-	if c.tokenValue() != "return" {
-		return
-	}
-	errorMessage := "invalid return grammar"
-	c.writeString("<returnStatement>\n")
-	c.writeTokenAndAdvance()
-	if c.tokenValue() == ";" {
-		c.writeTokenAndAdvance()
-		c.writeString("</returnStatement>\n")
-		return
-	}
-	c.compileExpression()
-	c.checkTokenValue(";", errorMessage)
-	c.writeString("</returnStatement>\n")
-}
-
-func (c *Compiler) handleMultipleTerms() {
-	if c.tokenIsOp() {
-		c.writeTokenAndAdvance()
-	} else {
-		return
-	}
-	c.compileTerm()
-	c.handleMultipleTerms()
-}
-
-func (c *Compiler) compileExpression() {
+func (c *compilationEngine) compileExpression() {
 	c.writeString("<expression>\n")
 	c.compileTerm()
 	c.handleMultipleTerms()
 	c.writeString("</expression>\n")
 }
 
-func (c *Compiler) handleIdentifierTerm(errorMessage string) {
-	if c.tokenValue() == "[" {
-		c.writeTokenAndAdvance()
-		c.compileExpression()
-		c.checkTokenValue("]", errorMessage)
-		c.writeString("</term>\n")
-	} else if c.tokenValue() == "(" {
-		c.writeTokenAndAdvance()
-		c.compileExpressionList()
-		c.checkTokenValue(")", errorMessage)
-		c.writeString("</term>\n")
-	} else if c.tokenValue() == "." {
-		c.writeTokenAndAdvance()
-		c.checkTokenIdentifier(errorMessage)
-		c.checkTokenValue("(", errorMessage)
-		c.compileExpressionList()
-		c.checkTokenValue(")", errorMessage)
-		c.writeString("</term>\n")
-	} else {
-		c.writeString("</term>\n")
-		return
-	}
-}
-
-func (c *Compiler) compileTerm() {
-	errorMessage := "invalid term grammar"
-	c.writeString("<term>\n")
-	if c.tokenCategory() == intConst || c.tokenCategory() == stringConst || c.tokenCategory() == keyword {
-		c.writeTokenAndAdvance()
-		c.writeString("</term>\n")
-	} else if c.tokenCategory() == identifier {
-		c.writeTokenAndAdvance()
-		c.handleIdentifierTerm(errorMessage)
-	} else if c.tokenValue() == "(" {
-		c.writeTokenAndAdvance()
-		c.compileExpression()
-		c.checkTokenValue(")", errorMessage)
-		c.writeString("</term>\n")
-	} else if c.tokenIsUnaryOp() {
-		c.writeTokenAndAdvance()
-		c.compileTerm()
-		c.writeString("</term>\n")
-	}
-}
-
-func (c *Compiler) compileSubroutineCall() {
-	errorMessage := "invalid subroutineCall grammar"
-	c.checkTokenIdentifier(errorMessage)
-	if c.tokenValue() == "(" {
-		c.writeTokenAndAdvance()
-		c.compileExpressionList()
-		c.checkTokenValue(")", errorMessage)
-	} else if c.tokenValue() == "." {
-		c.writeTokenAndAdvance()
-		c.checkTokenIdentifier(errorMessage)
-		c.checkTokenValue("(", errorMessage)
-		c.compileExpressionList()
-		c.checkTokenValue(")", errorMessage)
-	} else {
-		log.Fatal(errorMessage)
-	}
-}
-
-func (c *Compiler) handleMultipleExpressions() {
+func (c *compilationEngine) handleMultipleExpressions() {
 	if c.tokenValue() != "," {
 		return
 	}
@@ -423,15 +97,332 @@ func (c *Compiler) handleMultipleExpressions() {
 	c.handleMultipleExpressions()
 }
 
-func (c *Compiler) compileExpressionList() {
+func (c *compilationEngine) compileFunctionCall() {
+	if c.tokenValue() != "(" {
+		return
+	}
+	c.compileTokenValue("(")
 	c.writeString("<expressionList>\n")
+	// handle empty expression list
 	if c.tokenValue() == ")" {
 		c.writeString("</expressionList>\n")
+		c.compileTokenValue(")")
 		return
 	}
 	c.compileExpression()
 	c.handleMultipleExpressions()
 	c.writeString("</expressionList>\n")
+	c.compileTokenValue(")")
+}
+
+func (c *compilationEngine) compileIdentifier() {
+	if c.tokenCategory() == identifier {
+		c.writeTokenAndAdvance()
+	} else {
+		panic(fmt.Errorf(`expected token to be an identifier, got %v`, c.tokenCategory()))
+	}
+}
+
+func (c *compilationEngine) compileMethodCall() {
+	if c.tokenValue() != "." {
+		return
+	}
+	c.compileTokenValue(".")
+	c.compileIdentifier()
+	c.compileFunctionCall()
+}
+
+func (c *compilationEngine) compileSubroutineCall() {
+	if c.tokenValue() != "(" && c.tokenValue() != "." {
+		return
+	}
+	c.compileFunctionCall()
+	c.compileMethodCall()
+}
+
+func (c *compilationEngine) handleArrayIndex() {
+	if c.tokenValue() != "[" {
+		return
+	}
+	c.compileTokenValue("[")
+	c.compileExpression()
+	c.compileTokenValue("]")
+}
+
+func (c *compilationEngine) handleIdentifierTerm() {
+	c.compileIdentifier()
+	c.handleArrayIndex()
+	c.compileSubroutineCall()
+}
+
+func (c *compilationEngine) handleExpressionBrackets() {
+	c.compileTokenValue("(")
+	c.compileExpression()
+	c.compileTokenValue(")")
+}
+
+func (c *compilationEngine) compileTerm() {
+	c.writeString("<term>\n")
+	if c.tokenCategory() == intConst || c.tokenCategory() == stringConst || c.tokenCategory() == keyword {
+		c.writeTokenAndAdvance()
+	} else if c.tokenCategory() == identifier {
+		c.handleIdentifierTerm()
+	} else if c.tokenValue() == "(" {
+		c.handleExpressionBrackets()
+	} else if c.tokenIsUnaryOp() {
+		c.writeTokenAndAdvance()
+		c.compileTerm()
+	} else {
+		panic(fmt.Errorf("invalid term grammar %s is not valid for a term", c.tokenValue()))
+	}
+	c.writeString("</term>\n")
+}
+
+func (c *compilationEngine) handleMultipleTerms() {
+	if !c.tokenIsOp() {
+		return
+	}
+	c.writeTokenAndAdvance()
+	c.compileTerm()
+	c.handleMultipleTerms()
+}
+
+func (c *compilationEngine) compileTokenIsType() {
+	if c.tokenIsType() {
+		c.writeTokenAndAdvance()
+	} else {
+		panic(fmt.Errorf(`expected a token that is a type according to jack grammar, got "%s"`, c.tokenValue()))
+	}
+}
+
+func (c *compilationEngine) handleMultipleParameters() {
+	if c.tokenValue() != "," {
+		return
+	}
+	c.writeTokenAndAdvance()
+	c.compileTokenIsType()
+	c.compileIdentifier()
+	c.handleMultipleParameters()
+}
+
+func (c *compilationEngine) compileLet() {
+	if c.tokenValue() != "let" {
+		return
+	}
+	c.writeString("<letStatement>\n")
+	c.writeTokenAndAdvance()
+	c.compileIdentifier()
+	c.handleArrayIndex()
+	c.compileTokenValue("=")
+	c.compileExpression()
+	c.compileTokenValue(";")
+	c.writeString("</letStatement>\n")
+}
+
+func (c *compilationEngine) compileElse() {
+	if c.tokenValue() != "else" {
+		return
+	}
+	c.writeTokenAndAdvance()
+	c.handleStatements()
+}
+
+func (c *compilationEngine) compileIf() {
+	if c.tokenValue() != "if" {
+		return
+	}
+	c.writeString("<ifStatement>\n")
+	c.writeTokenAndAdvance()
+	c.handleExpressionStatements()
+	c.compileElse()
+	c.writeString("</ifStatement>\n")
+}
+
+func (c *compilationEngine) compileWhile() {
+	if c.tokenValue() != "while" {
+		return
+	}
+	c.writeString("<whileStatement>\n")
+	c.writeTokenAndAdvance()
+	c.handleExpressionStatements()
+	c.writeString("</whileStatement>\n")
+}
+
+func (c *compilationEngine) compileDo() {
+	if c.tokenValue() != "do" {
+		return
+	}
+	c.writeString("<doStatement>\n")
+	c.writeTokenAndAdvance()
+	c.compileIdentifier()
+	c.compileSubroutineCall()
+	c.compileTokenValue(";")
+	c.writeString("</doStatement>\n")
+}
+
+func (c *compilationEngine) compileReturn() {
+	if c.tokenValue() != "return" {
+		return
+	}
+	c.writeString("<returnStatement>\n")
+	c.writeTokenAndAdvance()
+	// handle empty return
+	if c.tokenValue() == ";" {
+		c.writeTokenAndAdvance()
+		c.writeString("</returnStatement>\n")
+		return
+	}
+	c.compileExpression()
+	c.compileTokenValue(";")
+	c.writeString("</returnStatement>\n")
+}
+
+func (c *compilationEngine) isTokenStatement() bool {
+	statementTokens := []string{
+		"let",
+		"if",
+		"while",
+		"do",
+		"return",
+	}
+	for _, token := range statementTokens {
+		if c.tokenValue() == token {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *compilationEngine) compileStatement() {
+	if !c.isTokenStatement() {
+		return
+	}
+	c.compileLet()
+	c.compileIf()
+	c.compileWhile()
+	c.compileDo()
+	c.compileReturn()
+	c.compileStatement()
+}
+
+func (c *compilationEngine) compileStatements() {
+	c.writeString("<statements>\n")
+	c.compileStatement()
+	c.writeString("</statements>\n")
+}
+
+func (c *compilationEngine) handleStatements() {
+	c.compileTokenValue("{")
+	c.compileStatements()
+	c.compileTokenValue("}")
+}
+
+func (c *compilationEngine) handleExpressionStatements() {
+	c.handleExpressionBrackets()
+	c.handleStatements()
+}
+
+func (c *compilationEngine) compileTokenIsTypeOrVoid() {
+	if c.tokenIsType() || c.tokenValue() == "void" {
+		c.writeTokenAndAdvance()
+	} else {
+		panic(fmt.Errorf(`expected either a type according to jack grammar or void, got: "%s"`, c.tokenValue()))
+	}
+}
+
+func (c *compilationEngine) compileParameterList() {
+	c.writeString("<parameterList>\n")
+	// handle empty parameter list
+	if c.tokenValue() == ")" {
+		c.writeString("</parameterList>\n")
+		return
+	}
+	c.compileTokenIsType()
+	c.compileIdentifier()
+	c.handleMultipleParameters()
+	c.writeString("</parameterList>\n")
+}
+
+func (c *compilationEngine) compileMultipleVarDecs() {
+	if c.tokenValue() != "," {
+		return
+	}
+	c.writeTokenAndAdvance()
+	c.compileIdentifier()
+	c.compileMultipleVarDecs()
+}
+
+func (c *compilationEngine) compileVarDec() {
+	if c.tokenValue() != "var" {
+		return
+	}
+	c.writeString("<varDec>\n")
+	c.writeTokenAndAdvance()
+	c.compileTokenIsType()
+	c.compileIdentifier()
+	c.compileMultipleVarDecs()
+	c.compileTokenValue(";")
+	c.writeString("</varDec>\n")
+	c.compileVarDec()
+}
+
+func (c *compilationEngine) compileSubroutineBody() {
+	c.writeString("<subroutineBody>\n")
+	c.compileTokenValue("{")
+	c.compileVarDec()
+	c.compileStatements()
+	c.compileTokenValue("}")
+	c.writeString("</subroutineBody>\n")
+}
+
+func (c *compilationEngine) compileSubroutine() {
+	if c.tokenValue() != "constructor" && c.tokenValue() != "function" && c.tokenValue() != "method" {
+		return
+	}
+	c.writeString("<subroutineDec>\n")
+	c.writeTokenAndAdvance()
+	c.compileTokenIsTypeOrVoid()
+	c.compileIdentifier()
+	c.compileTokenValue("(")
+	c.compileParameterList()
+	c.compileTokenValue(")")
+	c.compileSubroutineBody()
+	c.writeString("</subroutineDec>\n")
+	c.compileSubroutine()
+}
+
+func (c *compilationEngine) compileClassVarDec() {
+	if c.tokenValue() != "static" && c.tokenValue() != "field" {
+		return
+	}
+	c.writeString("<classVarDec>\n")
+	c.writeTokenAndAdvance()
+	c.compileTokenIsType()
+	c.compileIdentifier()
+	c.compileMultipleVarDecs()
+	c.compileTokenValue(";")
+	c.writeString("</classVarDec>\n")
+	c.compileClassVarDec()
+}
+
+func (c *compilationEngine) compileFinalToken() {
+	if c.tokenValue() == "}" {
+		c.writeToken()
+	} else {
+		panic(fmt.Errorf(`expected token "}" as the final token, got "%s"`, c.tokenValue()))
+	}
+}
+
+func (c *compilationEngine) compileClass() {
+	c.writeString("<class>\n")
+	c.advance()
+	c.compileTokenValue("class")
+	c.compileIdentifier()
+	c.compileTokenValue("{")
+	c.compileClassVarDec()
+	c.compileSubroutine()
+	c.compileFinalToken()
+	c.writeString("</class>\n")
 }
 
 func compileFile(path string) {
@@ -463,8 +454,8 @@ func compileFile(path string) {
 		}
 	}()
 
-	compiler := NewCompiler(file, writer)
-	compiler.compileClass()
+	compilationEngine := newCompilationEngine(file, writer)
+	compilationEngine.compileClass()
 }
 
 func getJackFiles(jackFiles *[]string) filepath.WalkFunc {
@@ -479,6 +470,8 @@ func getJackFiles(jackFiles *[]string) filepath.WalkFunc {
 	}
 }
 
+// Compile takes a path to a folder or a file and compiles the .jack files/file
+// into an xml document defining the grammar and structure of the jack code.
 func Compile(path string) {
 	path = filepath.Clean(path)
 	fileInfo, err := os.Stat(path)
