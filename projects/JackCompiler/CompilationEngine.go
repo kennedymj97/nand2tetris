@@ -7,15 +7,16 @@ import (
 )
 
 type compilationEngine struct {
-	scanner *scanner
-	output  *bufio.Writer
+	scanner     *scanner
+	output      *bufio.Writer
+	symbolTable *symbolTable
 }
 
 func newCompilationEngine(reader io.Reader, writer *bufio.Writer) *compilationEngine {
-	scanner := newScanner(reader)
 	return &compilationEngine{
-		scanner,
+		newScanner(reader),
 		writer,
+		newSymbolTable(),
 	}
 }
 
@@ -58,6 +59,47 @@ func (c *compilationEngine) writeToken() {
 		label = "identifier"
 	}
 	c.output.WriteString(fmt.Sprintf("<%s>%s</%s>\n", label, c.tokenValue(), label))
+}
+
+func (c *compilationEngine) compileIdentifier(defining bool, kind string, symbolType string) {
+	if c.tokenCategory() != identifier {
+		panic(fmt.Sprintf("expected an identifer term, got %s", c.tokenValue()))
+	}
+	c.writeIdentifier(c.tokenValue(), defining, kind, symbolType)
+	c.advance()
+}
+
+// TODO: need to split this up into many functions for better clarity
+func (c *compilationEngine) writeIdentifier(name string, defining bool, kind string, symbolType string) {
+	var status string
+	if defining {
+		status = "define"
+	} else {
+		status = "use"
+	}
+
+	if isTableVar(kind) && defining {
+		c.symbolTable.define(name, symbolType, kind)
+		index := c.symbolTable.indexOf(name)
+		c.output.WriteString(fmt.Sprintf("<%s%s%d>%s</%s%s%d>\n", status, kind, index, name, status, kind, index))
+		return
+	}
+
+	symbolKind := c.symbolTable.kindOf(name)
+	if isTableVar(kind) && symbolKind != NONE {
+		index := c.symbolTable.indexOf(name)
+		c.output.WriteString(fmt.Sprintf("<%s%s%d>%s</%s%s%d>\n", status, symbolKind, index, name, status, symbolKind, index))
+		return
+	}
+
+	c.output.WriteString(fmt.Sprintf("<%s%s>%s</%s%s>\n", status, kind, name, status, kind))
+}
+
+func isTableVar(kind string) bool {
+	if kind != "class" && kind != "method" && kind != "function" && kind != "subroutine" && kind != "constructor" {
+		return true
+	}
+	return false
 }
 
 func (c *compilationEngine) writeTokenAndAdvance() {
@@ -111,29 +153,13 @@ func (c *compilationEngine) compileFunctionCall() {
 	c.compileTokenValue(")")
 }
 
-func (c *compilationEngine) compileIdentifier() {
-	if c.tokenCategory() == identifier {
-		c.writeTokenAndAdvance()
-	} else {
-		panic(fmt.Errorf(`expected token to be an identifier, got %v`, c.tokenCategory()))
-	}
-}
-
-func (c *compilationEngine) compileMethodCall() {
+func (c *compilationEngine) compileObjectUse() {
 	if c.tokenValue() != "." {
 		return
 	}
 	c.compileTokenValue(".")
-	c.compileIdentifier()
+	c.compileIdentifier(false, "subroutine", "")
 	c.compileFunctionCall()
-}
-
-func (c *compilationEngine) compileSubroutineCall() {
-	if c.tokenValue() != "(" && c.tokenValue() != "." {
-		return
-	}
-	c.compileFunctionCall()
-	c.compileMethodCall()
 }
 
 func (c *compilationEngine) handleArrayIndex() {
@@ -146,9 +172,31 @@ func (c *compilationEngine) handleArrayIndex() {
 }
 
 func (c *compilationEngine) handleIdentifierTerm() {
-	c.compileIdentifier()
-	c.handleArrayIndex()
-	c.compileSubroutineCall()
+	// this identifier could be a class, subroutine, var, arg, static, field
+	// can check if var, arg, static, field using symbol table
+	// if none of above dependant on next token:
+	// 		- if next token is . then it must be a class (could also be a var/arg/static/field but we already checked)
+	//		- if next token is ( then it must be a subroutine call
+	identifierName := c.tokenValue()
+	c.advance()
+	switch c.tokenValue() {
+	case "[":
+		c.writeIdentifier(identifierName, false, "", "")
+		c.handleArrayIndex()
+	case "(":
+		c.writeIdentifier(identifierName, false, "subroutine", "")
+		c.compileFunctionCall()
+	case ".":
+		// PROBLEM: this will always be labelled as a class when it could be a var
+		if symbolType := c.symbolTable.kindOf(identifierName); symbolType != NONE {
+			c.writeIdentifier(identifierName, false, symbolType.String(), "")
+		} else {
+			c.writeIdentifier(identifierName, false, "class", "")
+		}
+		c.compileObjectUse()
+	default:
+		c.writeIdentifier(identifierName, false, "", "")
+	}
 }
 
 func (c *compilationEngine) handleExpressionBrackets() {
@@ -183,31 +231,13 @@ func (c *compilationEngine) handleMultipleTerms() {
 	c.handleMultipleTerms()
 }
 
-func (c *compilationEngine) compileTokenIsType() {
-	if c.tokenIsType() {
-		c.writeTokenAndAdvance()
-	} else {
-		panic(fmt.Errorf(`expected a token that is a type according to jack grammar, got "%s"`, c.tokenValue()))
-	}
-}
-
-func (c *compilationEngine) handleMultipleParameters() {
-	if c.tokenValue() != "," {
-		return
-	}
-	c.writeTokenAndAdvance()
-	c.compileTokenIsType()
-	c.compileIdentifier()
-	c.handleMultipleParameters()
-}
-
 func (c *compilationEngine) compileLet() {
 	if c.tokenValue() != "let" {
 		return
 	}
 	c.writeString("<letStatement>\n")
 	c.writeTokenAndAdvance()
-	c.compileIdentifier()
+	c.compileIdentifier(false, "", "")
 	c.handleArrayIndex()
 	c.compileTokenValue("=")
 	c.compileExpression()
@@ -250,8 +280,20 @@ func (c *compilationEngine) compileDo() {
 	}
 	c.writeString("<doStatement>\n")
 	c.writeTokenAndAdvance()
-	c.compileIdentifier()
-	c.compileSubroutineCall()
+	identifierName := c.tokenValue()
+	c.advance()
+	switch c.tokenValue() {
+	case "(":
+		c.writeIdentifier(identifierName, false, "subroutine", "")
+		c.compileFunctionCall()
+	case ".":
+		if symbolType := c.symbolTable.kindOf(identifierName); symbolType != NONE {
+			c.writeIdentifier(identifierName, false, symbolType.String(), "")
+		} else {
+			c.writeIdentifier(identifierName, false, "class", "")
+		}
+		c.compileObjectUse()
+	}
 	c.compileTokenValue(";")
 	c.writeString("</doStatement>\n")
 }
@@ -333,19 +375,38 @@ func (c *compilationEngine) compileParameterList() {
 		c.writeString("</parameterList>\n")
 		return
 	}
+	symbolType := c.tokenValue()
 	c.compileTokenIsType()
-	c.compileIdentifier()
-	c.handleMultipleParameters()
+	c.compileIdentifier(true, "arg", symbolType)
+	c.handleMultipleParameters(symbolType)
 	c.writeString("</parameterList>\n")
 }
 
-func (c *compilationEngine) compileMultipleVarDecs() {
+func (c *compilationEngine) handleMultipleParameters(symbolType string) {
 	if c.tokenValue() != "," {
 		return
 	}
 	c.writeTokenAndAdvance()
-	c.compileIdentifier()
-	c.compileMultipleVarDecs()
+	c.compileTokenIsType()
+	c.compileIdentifier(true, "arg", symbolType)
+	c.handleMultipleParameters(symbolType)
+}
+
+func (c *compilationEngine) compileTokenIsType() {
+	if c.tokenIsType() {
+		c.writeTokenAndAdvance()
+	} else {
+		panic(fmt.Errorf(`expected a token that is a type according to jack grammar, got "%s"`, c.tokenValue()))
+	}
+}
+
+func (c *compilationEngine) compileMultipleVarDecs(kind string, symbolType string) {
+	if c.tokenValue() != "," {
+		return
+	}
+	c.writeTokenAndAdvance()
+	c.compileIdentifier(true, kind, symbolType)
+	c.compileMultipleVarDecs(kind, symbolType)
 }
 
 func (c *compilationEngine) compileVarDec() {
@@ -354,9 +415,10 @@ func (c *compilationEngine) compileVarDec() {
 	}
 	c.writeString("<varDec>\n")
 	c.writeTokenAndAdvance()
+	symbolType := c.tokenValue()
 	c.compileTokenIsType()
-	c.compileIdentifier()
-	c.compileMultipleVarDecs()
+	c.compileIdentifier(true, "var", symbolType)
+	c.compileMultipleVarDecs("var", symbolType)
 	c.compileTokenValue(";")
 	c.writeString("</varDec>\n")
 	c.compileVarDec()
@@ -375,10 +437,11 @@ func (c *compilationEngine) compileSubroutine() {
 	if c.tokenValue() != "constructor" && c.tokenValue() != "function" && c.tokenValue() != "method" {
 		return
 	}
+	c.symbolTable.startSubroutine()
 	c.writeString("<subroutineDec>\n")
 	c.writeTokenAndAdvance()
 	c.compileTokenIsTypeOrVoid()
-	c.compileIdentifier()
+	c.compileIdentifier(true, "subroutine", "")
 	c.compileTokenValue("(")
 	c.compileParameterList()
 	c.compileTokenValue(")")
@@ -392,10 +455,12 @@ func (c *compilationEngine) compileClassVarDec() {
 		return
 	}
 	c.writeString("<classVarDec>\n")
+	kind := c.tokenValue()
 	c.writeTokenAndAdvance()
+	symbolType := c.tokenValue()
 	c.compileTokenIsType()
-	c.compileIdentifier()
-	c.compileMultipleVarDecs()
+	c.compileIdentifier(true, kind, symbolType)
+	c.compileMultipleVarDecs(kind, symbolType)
 	c.compileTokenValue(";")
 	c.writeString("</classVarDec>\n")
 	c.compileClassVarDec()
@@ -413,7 +478,7 @@ func (c *compilationEngine) compileClass() {
 	c.writeString("<class>\n")
 	c.advance()
 	c.compileTokenValue("class")
-	c.compileIdentifier()
+	c.compileIdentifier(true, "class", "")
 	c.compileTokenValue("{")
 	c.compileClassVarDec()
 	c.compileSubroutine()

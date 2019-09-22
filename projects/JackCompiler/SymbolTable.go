@@ -1,5 +1,7 @@
 package JackCompiler
 
+import "fmt"
+
 type table map[string]map[string]interface{}
 
 func newTable() table {
@@ -46,20 +48,37 @@ const (
 	NONE
 )
 
-func (s *symbolTable) define(name string, symbolType string, kind symbolKind) {
-	switch kind {
+func (s symbolKind) String() string {
+	switch s {
 	case VAR:
-		s.subroutineTable.newEntry(name, symbolType, kind, s.varIndex)
-		s.varIndex++
+		return "var"
 	case ARG:
-		s.subroutineTable.newEntry(name, symbolType, kind, s.argIndex)
-		s.argIndex++
+		return "arg"
 	case STATIC:
-		s.classTable.newEntry(name, symbolType, kind, s.staticIndex)
-		s.staticIndex++
+		return "static"
 	case FIELD:
-		s.classTable.newEntry(name, symbolType, kind, s.fieldIndex)
+		return "field"
+	default:
+		return ""
+	}
+}
+
+func (s *symbolTable) define(name string, symbolType string, kind string) {
+	switch kind {
+	case "var":
+		s.subroutineTable.newEntry(name, symbolType, VAR, s.varIndex)
+		s.varIndex++
+	case "arg":
+		s.subroutineTable.newEntry(name, symbolType, ARG, s.argIndex)
+		s.argIndex++
+	case "static":
+		s.classTable.newEntry(name, symbolType, STATIC, s.staticIndex)
+		s.staticIndex++
+	case "field":
+		s.classTable.newEntry(name, symbolType, FIELD, s.fieldIndex)
 		s.fieldIndex++
+	default:
+		panic(fmt.Sprintf("invalid symbol kind: %s", kind))
 	}
 }
 
