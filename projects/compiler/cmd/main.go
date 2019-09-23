@@ -1,11 +1,12 @@
 package main
 
 import (
-	"JackCompiler"
 	"os"
+
+	"example.com/compiler"
 )
 
 func main() {
 	args := os.Args[1:]
-	JackCompiler.Compile(args[0])
+	compiler.Compile(args[0])
 }

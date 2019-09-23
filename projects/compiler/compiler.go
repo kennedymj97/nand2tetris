@@ -1,4 +1,4 @@
-package JackCompiler
+package compiler
 
 import (
 	"bufio"
@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"example.com/engine"
 )
 
 func compileFile(path string) {
-	outPath := strings.Replace(path, ".jack", "(gen).xml", 1)
+	outPath := strings.Replace(path, ".jack", ".vm", 1)
 	outFile, err := os.Create(outPath)
 	if err != nil {
 		log.Fatal(err)
@@ -37,8 +39,8 @@ func compileFile(path string) {
 		}
 	}()
 
-	compilationEngine := newCompilationEngine(file, writer)
-	compilationEngine.compileClass()
+	compilationEngine := engine.NewCompilationEngine(file, writer)
+	compilationEngine.CompileClass()
 }
 
 func getJackFiles(jackFiles *[]string) filepath.WalkFunc {

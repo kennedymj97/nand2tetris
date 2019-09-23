@@ -1,4 +1,4 @@
-package JackCompiler
+package cache
 
 import "fmt"
 
@@ -8,11 +8,11 @@ func newTable() table {
 	return make(map[string]map[string]interface{})
 }
 
-func (t table) newEntry(name string, symbolType string, kind symbolKind, index int) {
+func (t table) newEntry(name string, symbolType string, kind Kind, index int) {
 	t[name] = map[string]interface{}{"type": symbolType, "kind": kind, "index": index}
 }
 
-type symbolTable struct {
+type SymbolTable struct {
 	classTable      table
 	subroutineTable table
 	fieldIndex      int
@@ -21,8 +21,8 @@ type symbolTable struct {
 	argIndex        int
 }
 
-func newSymbolTable() *symbolTable {
-	return &symbolTable{
+func NewSymbolTable() *SymbolTable {
+	return &SymbolTable{
 		classTable:      newTable(),
 		subroutineTable: newTable(),
 		fieldIndex:      0,
@@ -32,82 +32,97 @@ func newSymbolTable() *symbolTable {
 	}
 }
 
-func (s *symbolTable) startSubroutine() {
+func (s *SymbolTable) StartSubroutine() {
 	s.subroutineTable = newTable()
 	s.varIndex = 0
 	s.argIndex = 0
 }
 
-type symbolKind uint8
+type Kind uint8
 
 const (
-	VAR symbolKind = iota
-	ARG
-	STATIC
-	FIELD
-	NONE
+	Var Kind = iota
+	Arg
+	Static
+	Field
+	None
 )
 
-func (s symbolKind) String() string {
+func (s Kind) String() string {
 	switch s {
-	case VAR:
+	case Var:
 		return "var"
-	case ARG:
+	case Arg:
 		return "arg"
-	case STATIC:
+	case Static:
 		return "static"
-	case FIELD:
+	case Field:
 		return "field"
 	default:
 		return ""
 	}
 }
 
-func (s *symbolTable) define(name string, symbolType string, kind string) {
+func ParseKind(kind string) Kind {
 	switch kind {
 	case "var":
-		s.subroutineTable.newEntry(name, symbolType, VAR, s.varIndex)
-		s.varIndex++
+		return Var
 	case "arg":
-		s.subroutineTable.newEntry(name, symbolType, ARG, s.argIndex)
-		s.argIndex++
+		return Arg
 	case "static":
-		s.classTable.newEntry(name, symbolType, STATIC, s.staticIndex)
+		return Static
+	case "field": 
+		return Field
+	default:
+		return None
+	}
+}
+
+func (s *SymbolTable) Define(name string, symbolType string, kind Kind) {
+	switch kind {
+	case Var:
+		s.subroutineTable.newEntry(name, symbolType, kind, s.varIndex)
+		s.varIndex++
+	case Arg:
+		s.subroutineTable.newEntry(name, symbolType, kind, s.argIndex)
+		s.argIndex++
+	case Static:
+		s.classTable.newEntry(name, symbolType, kind, s.staticIndex)
 		s.staticIndex++
-	case "field":
-		s.classTable.newEntry(name, symbolType, FIELD, s.fieldIndex)
+	case Field:
+		s.classTable.newEntry(name, symbolType, kind, s.fieldIndex)
 		s.fieldIndex++
 	default:
 		panic(fmt.Sprintf("invalid symbol kind: %s", kind))
 	}
 }
 
-func (s *symbolTable) varCount(kind symbolKind) int {
+func (s *SymbolTable) VarCount(kind Kind) int {
 	switch kind {
-	case VAR:
+	case Var:
 		return s.varIndex
-	case ARG:
+	case Arg:
 		return s.argIndex
-	case STATIC:
+	case Static:
 		return s.staticIndex
-	case FIELD:
+	case Field:
 		return s.fieldIndex
 	}
 	return -1
 }
 
-func (s *symbolTable) kindOf(name string) symbolKind {
+func (s *SymbolTable) KindOf(name string) Kind {
 	if kind, ok := s.classTable[name]["kind"]; ok {
-		return kind.(symbolKind)
+		return kind.(Kind)
 	}
 
 	if kind, ok := s.subroutineTable[name]["kind"]; ok {
-		return kind.(symbolKind)
+		return kind.(Kind)
 	}
-	return NONE
+	return None
 }
 
-func (s *symbolTable) typeOf(name string) string {
+func (s *SymbolTable) TypeOf(name string) string {
 	if symbolType, ok := s.classTable[name]["type"]; ok {
 		return symbolType.(string)
 	}
@@ -119,7 +134,7 @@ func (s *symbolTable) typeOf(name string) string {
 	return ""
 }
 
-func (s *symbolTable) indexOf(name string) int {
+func (s *SymbolTable) IndexOf(name string) int {
 	if index, ok := s.classTable[name]["index"]; ok {
 		return index.(int)
 	}
