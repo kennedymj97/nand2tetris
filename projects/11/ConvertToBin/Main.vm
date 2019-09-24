@@ -6,34 +6,36 @@ push constant 16
 push constant 1
 neg
 call Main.fillMemory 3
-push local 0
-<useclass>Memory</useclass>
 push constant 8000
+call Memory.peek 1
+pop local 0
 push local 0
 call Main.convert 1
 push constant 0
 return
-function Main.convert 0
+function Main.convert 1
 push constant 0
 pop local 0
 push constant 0
 pop local 1
 push constant 0
 pop local 2
+push constant 1
+neg
+pop local 2
 push local 2
-push local 2
-push local 1
 push local 1
 push constant 1
 add
+pop local 1
 push local 0
-<useclass>Main</useclass>
-push local 0
+call Main.nextMask 1
+pop local 0
 push local 1
 push constant 16
 gt
 not
-<use>value</use>
+push  -1
 push local 0
 and
 push constant 0
@@ -49,27 +51,31 @@ push local 1
 add
 push constant 0
 call Memory.poke 2
-push local 2
+pop local 2
 push constant 0
 return
-function Main.nextMask 0
-<use>mask</use>
+function Main.nextMask 1
+push  -1
 push constant 0
 eq
 push constant 1
-<use>mask</use>
+push  -1
 push constant 2
 call Math.multiply 2
-function Main.fillMemory 1
+function Main.fillMemory 3
+push argument 0
 push constant 0
 gt
-<use>startAddress</use>
+push  -1
+push argument 1
 call Memory.poke 2
+push argument 0
 push constant 1
 sub
-<use>startAddress</use>
-<use>startAddress</use>
+pop argument 0
+push  -1
 push constant 1
 add
+pop  -1
 push constant 0
 return

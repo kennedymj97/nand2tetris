@@ -25,6 +25,7 @@ const (
 	That
 	Pointer
 	Temp
+	None
 )
 
 func (s Segment) String() string {

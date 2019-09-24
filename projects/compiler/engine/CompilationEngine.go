@@ -218,23 +218,49 @@ func (c *compilationEngine) handleIdentifierTerm() {
 	identifierName := c.tokenValue()
 	c.advance()
 	switch c.tokenValue() {
-	case "[":
-		c.writeIdentifier(identifierName, false, "", "")
-		c.handleArrayIndex()
 	case "(":
-		c.writeIdentifier(identifierName, false, "subroutine", "")
-		c.compileFunctionCall()
+		// c.writeIdentifier(identifierName, false, "subroutine", "")
+		nArgs := c.compileFunctionCall()
+		c.output.WriteCall(identifierName, nArgs)
 	case ".":
-		// PROBLEM: this will always be labelled as a class when it could be a var
-		if symbolType := c.symbolTable.KindOf(identifierName); symbolType != cache.None {
-			c.writeIdentifier(identifierName, false, symbolType.String(), "")
-		} else {
-			c.writeIdentifier(identifierName, false, "class", "")
-		}
-		c.compileObjectUse()
+		// if kind := c.symbolTable.KindOf(identifierName); kind != cache.None {
+		// 	c.writeIdentifier(identifierName, false, kind.String(), "")
+		// } else {
+		// 	c.writeIdentifier(identifierName, false, "class", "")
+		// }
+		functionName, nArgs := c.compileObjectUse()
+		c.output.WriteCall(fmt.Sprintf("%s.%s", identifierName, functionName), nArgs)
 	default:
-		c.writeIdentifier(identifierName, false, "", "")
+		// get the kind and index
+		kind := c.symbolTable.KindOf(identifierName)
+		index := c.symbolTable.IndexOf(identifierName)
+		segment := convertKindToSegment(kind)
+		c.output.WritePush(segment, strconv.Itoa(index))
 	}
+	/*
+		OLD CODE
+
+	*/
+	// identifierName := c.tokenValue()
+	// c.advance()
+	// switch c.tokenValue() {
+	// case "[":
+	// 	c.writeIdentifier(identifierName, false, "", "")
+	// 	c.handleArrayIndex()
+	// case "(":
+	// 	c.writeIdentifier(identifierName, false, "subroutine", "")
+	// 	c.compileFunctionCall()
+	// case ".":
+	// 	// PROBLEM: this will always be labelled as a class when it could be a var
+	// 	if symbolType := c.symbolTable.KindOf(identifierName); symbolType != cache.None {
+	// 		c.writeIdentifier(identifierName, false, symbolType.String(), "")
+	// 	} else {
+	// 		c.writeIdentifier(identifierName, false, "class", "")
+	// 	}
+	// 	c.compileObjectUse()
+	// default:
+	// 	c.writeIdentifier(identifierName, false, "", "")
+	// }
 }
 
 func (c *compilationEngine) handleExpressionBrackets() {
@@ -248,8 +274,14 @@ func (c *compilationEngine) compileTerm() {
 	if c.tokenCategory() == tokenizer.IntConst {
 		c.output.WritePush(writer.Const, c.tokenValue())
 		c.advance()
-	} else if c.tokenCategory() == tokenizer.StringConst || c.tokenCategory() == tokenizer.Keyword {
+	} else if c.tokenCategory() == tokenizer.StringConst {
 		// c.writeTokenAndAdvance()
+		c.advance()
+	} else if c.tokenCategory() == tokenizer.Keyword {
+		if c.tokenValue() == "true" {
+			c.output.WritePush(writer.Const, strconv.Itoa(1))
+			c.output.WriteArithmetic(writer.Neg)
+		}
 		c.advance()
 	} else if c.tokenCategory() == tokenizer.Identifier {
 		c.handleIdentifierTerm()
@@ -288,15 +320,42 @@ func (c *compilationEngine) compileLet() {
 	if c.tokenValue() != "let" {
 		return
 	}
+	c.advance()
+	// get index and kind of the variable we are assigning to
+	kind := c.symbolTable.KindOf(c.tokenValue())
+	index := c.symbolTable.IndexOf(c.tokenValue())
+	c.advance()
+	// need to handle arrays here
+	c.advance()
+	// complete operation after the equals
+	c.compileExpression()
+	// pop the result back to the index/variable found
+	segment := convertKindToSegment(kind)
+	c.output.WritePop(segment, index)
+	c.advance()
+
 	// c.writeString("<letStatement>\n")
 	// c.writeTokenAndAdvance()
-	c.advance()
-	c.compileIdentifier(false, "", "")
-	c.handleArrayIndex()
-	c.compileTokenValue("=")
-	c.compileExpression()
-	c.compileTokenValue(";")
+	// c.advance()
+	// c.compileIdentifier(false, "", "")
+	// c.handleArrayIndex()
+	// c.compileTokenValue("=")
+	// c.compileExpression()
+	// c.compileTokenValue(";")
 	// c.writeString("</letStatement>\n")
+}
+
+func convertKindToSegment(kind cache.Kind) writer.Segment {
+	switch kind {
+	case cache.Var:
+		return writer.Local
+	case cache.Arg:
+		return writer.Arg
+	case cache.Static:
+		return writer.Static
+	default:
+		return writer.None
+	}
 }
 
 func (c *compilationEngine) compileElse() {
@@ -439,6 +498,7 @@ func (c *compilationEngine) compileParameterList(nLocals int) int {
 		// c.writeString("</parameterList>\n")
 		return nLocals
 	}
+	nLocals++
 	symbolType := c.tokenValue()
 	c.compileTokenIsType()
 	// c.compileIdentifier(true, "arg", symbolType)
@@ -457,7 +517,7 @@ func (c *compilationEngine) handleMultipleParameters(symbolType string, nLocals 
 	c.advance()
 	c.compileTokenIsType()
 	c.compileIdentifier(true, "arg", symbolType)
-	c.handleMultipleParameters(symbolType, nLocals)
+	nLocals = c.handleMultipleParameters(symbolType, nLocals)
 	return nLocals
 }
 
