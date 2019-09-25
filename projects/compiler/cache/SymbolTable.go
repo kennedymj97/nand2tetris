@@ -15,7 +15,7 @@ func (t table) newEntry(name string, symbolType string, kind Kind, index int) {
 type SymbolTable struct {
 	classTable      table
 	subroutineTable table
-	fieldIndex      int
+	FieldIndex      int
 	staticIndex     int
 	varIndex        int
 	argIndex        int
@@ -25,7 +25,7 @@ func NewSymbolTable() *SymbolTable {
 	return &SymbolTable{
 		classTable:      newTable(),
 		subroutineTable: newTable(),
-		fieldIndex:      0,
+		FieldIndex:      0,
 		staticIndex:     0,
 		varIndex:        0,
 		argIndex:        0,
@@ -71,7 +71,7 @@ func ParseKind(kind string) Kind {
 		return Arg
 	case "static":
 		return Static
-	case "field": 
+	case "field":
 		return Field
 	default:
 		return None
@@ -90,8 +90,8 @@ func (s *SymbolTable) Define(name string, symbolType string, kind Kind) {
 		s.classTable.newEntry(name, symbolType, kind, s.staticIndex)
 		s.staticIndex++
 	case Field:
-		s.classTable.newEntry(name, symbolType, kind, s.fieldIndex)
-		s.fieldIndex++
+		s.classTable.newEntry(name, symbolType, kind, s.FieldIndex)
+		s.FieldIndex++
 	default:
 		panic(fmt.Sprintf("invalid symbol kind: %s", kind))
 	}
@@ -106,7 +106,7 @@ func (s *SymbolTable) VarCount(kind Kind) int {
 	case Static:
 		return s.staticIndex
 	case Field:
-		return s.fieldIndex
+		return s.FieldIndex
 	}
 	return -1
 }

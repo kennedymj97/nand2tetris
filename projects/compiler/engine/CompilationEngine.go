@@ -12,8 +12,9 @@ import (
 )
 
 type count struct {
-	ifIdx    int
-	whileIdx int
+	ifIdx     int
+	whileIdx  int
+	className string
 }
 
 type compilationEngine struct {
@@ -28,7 +29,7 @@ func NewCompilationEngine(reader io.Reader, w *bufio.Writer) *compilationEngine 
 		tokenizer.NewScanner(reader),
 		writer.NewVMWriter(w),
 		cache.NewSymbolTable(),
-		&count{0, 0},
+		&count{0, 0, ""},
 	}
 }
 
@@ -183,6 +184,7 @@ func (c *compilationEngine) compileFunctionCall() int {
 	if c.tokenValue() == ")" {
 		// c.writeString("</expressionList>\n")
 		// c.compileTokenValue(")")
+		c.advance()
 		return nArgs
 	}
 	nArgs++
@@ -194,17 +196,22 @@ func (c *compilationEngine) compileFunctionCall() int {
 	return nArgs
 }
 
-func (c *compilationEngine) compileObjectUse() (string, int) {
-	// if c.tokenValue() != "." {
-	// 	return
-	// }
-	// c.compileTokenValue(".")
-	// c.compileIdentifier(false, "subroutine", "")
+func (c *compilationEngine) compileMethodCall(kind cache.Kind, idx int) int {
+	nArgs := 1
+	c.advance() //(
+	seg := convertKindToSegment(kind)
+	c.output.WritePush(seg, strconv.Itoa(idx))
+	if c.tokenValue() == ")" {
+		// c.writeString("</expressionList>\n")
+		// c.compileTokenValue(")")
+		c.advance()
+		return nArgs
+	}
+	nArgs++
+	c.compileExpression()
+	nArgs = c.handleMultipleExpressions(nArgs)
 	c.advance()
-	functionName := c.tokenValue()
-	c.advance()
-	nArgs := c.compileFunctionCall()
-	return functionName, nArgs
+	return nArgs
 }
 
 func (c *compilationEngine) handleArrayIndex() {
@@ -226,17 +233,35 @@ func (c *compilationEngine) handleIdentifierTerm() {
 	c.advance()
 	switch c.tokenValue() {
 	case "(":
+		// THIS IS A METHOD OF THE CURRENT OBJ
 		// c.writeIdentifier(identifierName, false, "subroutine", "")
-		nArgs := c.compileFunctionCall()
-		c.output.WriteCall(identifierName, nArgs)
+		objName := c.symbolTable.TypeOf("this")
+		if objName == "" {
+			objName = c.count.className
+		}
+		nArgs := c.compileMethodCall(cache.None, 0)
+		c.output.WriteCall(fmt.Sprintf("%s.%s", objName, identifierName), nArgs)
 	case ".":
 		// if kind := c.symbolTable.KindOf(identifierName); kind != cache.None {
 		// 	c.writeIdentifier(identifierName, false, kind.String(), "")
 		// } else {
 		// 	c.writeIdentifier(identifierName, false, "class", "")
 		// }
-		functionName, nArgs := c.compileObjectUse()
-		c.output.WriteCall(fmt.Sprintf("%s.%s", identifierName, functionName), nArgs)
+		c.advance()
+		functionName := c.tokenValue()
+		var nArgs int
+		objType := c.symbolTable.TypeOf(identifierName)
+		c.advance()
+		if objType == "" {
+			nArgs = c.compileFunctionCall()
+			c.output.WriteCall(fmt.Sprintf("%s.%s", identifierName, functionName), nArgs)
+		} else {
+			objKind := c.symbolTable.KindOf(identifierName)
+			objIdx := c.symbolTable.IndexOf(identifierName)
+			nArgs = c.compileMethodCall(objKind, objIdx)
+			c.output.WriteCall(fmt.Sprintf("%s.%s", objType, functionName), nArgs)
+		}
+		// functionName, nArgs := c.compileObjectUse()
 	default:
 		// get the kind and index
 		kind := c.symbolTable.KindOf(identifierName)
@@ -290,6 +315,8 @@ func (c *compilationEngine) compileTerm() {
 			c.output.WriteArithmetic(writer.Neg)
 		} else if c.tokenValue() == "false" {
 			c.output.WritePush(writer.Const, strconv.Itoa(0))
+		} else if c.tokenValue() == "this" {
+			c.output.WritePush(writer.Pointer, strconv.Itoa(0))
 		}
 		c.advance()
 	} else if c.tokenCategory() == tokenizer.Identifier {
@@ -362,8 +389,10 @@ func convertKindToSegment(kind cache.Kind) writer.Segment {
 		return writer.Arg
 	case cache.Static:
 		return writer.Static
+	case cache.Field:
+		return writer.This
 	default:
-		return writer.None
+		return writer.Pointer
 	}
 }
 
@@ -396,9 +425,11 @@ func (c *compilationEngine) compileIf() {
 	c.output.WriteGoto("end" + ifIdxStr)
 	// write else label
 	c.output.WriteLabel("else" + ifIdxStr)
-	c.advance()
+	if c.tokenValue() == "else" {
+		c.advance()
+		c.handleStatements()
+	}
 	// compute code inside else
-	c.handleStatements()
 	// end of statement label
 	c.output.WriteLabel("end" + ifIdxStr)
 
@@ -443,24 +474,26 @@ func (c *compilationEngine) compileDo() {
 	// c.writeString("<doStatement>\n")
 	// c.writeTokenAndAdvance()
 	c.advance()
-	identifierName := c.tokenValue()
+	c.compileTerm()
 	c.advance()
-	switch c.tokenValue() {
-	case "(":
-		// c.writeIdentifier(identifierName, false, "subroutine", "")
-		nArgs := c.compileFunctionCall()
-		c.output.WriteCall(identifierName, nArgs)
-	case ".":
-		// if kind := c.symbolTable.KindOf(identifierName); kind != cache.None {
-		// 	c.writeIdentifier(identifierName, false, kind.String(), "")
-		// } else {
-		// 	c.writeIdentifier(identifierName, false, "class", "")
-		// }
-		functionName, nArgs := c.compileObjectUse()
-		c.output.WriteCall(fmt.Sprintf("%s.%s", identifierName, functionName), nArgs)
-	}
+	// identifierName := c.tokenValue()
+	// c.advance()
+	// switch c.tokenValue() {
+	// case "(":
+	// 	// c.writeIdentifier(identifierName, false, "subroutine", "")
+	// 	nArgs := c.compileFunctionCall()
+	// 	c.output.WriteCall(identifierName, nArgs)
+	// case ".":
+	// 	// if kind := c.symbolTable.KindOf(identifierName); kind != cache.None {
+	// 	// 	c.writeIdentifier(identifierName, false, kind.String(), "")
+	// 	// } else {
+	// 	// 	c.writeIdentifier(identifierName, false, "class", "")
+	// 	// }
+	// 	functionName, nArgs := c.compileObjectUse()
+	// 	c.output.WriteCall(fmt.Sprintf("%s.%s", identifierName, functionName), nArgs)
+	// }
 	// c.compileTokenValue(";")
-	c.advance()
+	// c.advance()
 	// c.writeString("</doStatement>\n")
 }
 
@@ -553,19 +586,22 @@ func (c *compilationEngine) compileParameterList() {
 	c.symbolTable.Define(c.tokenValue(), symbolType, cache.Arg)
 	// c.compileIdentifier(true, "arg", symbolType)
 	c.advance()
-	c.handleMultipleParameters(symbolType)
+	c.handleMultipleParameters()
 	// c.writeString("</parameterList>\n")
 }
 
-func (c *compilationEngine) handleMultipleParameters(symbolType string) {
+func (c *compilationEngine) handleMultipleParameters() {
 	if c.tokenValue() != "," {
 		return
 	}
 	// c.writeTokenAndAdvance()
 	c.advance()
+	symbolType := c.tokenValue()
 	c.compileTokenIsType()
-	c.compileIdentifier(true, "arg", symbolType)
-	c.handleMultipleParameters(symbolType)
+	// c.compileIdentifier(true, "arg", symbolType)
+	c.symbolTable.Define(c.tokenValue(), symbolType, cache.Arg)
+	c.advance()
+	c.handleMultipleParameters()
 	return
 }
 
@@ -634,35 +670,76 @@ func (c *compilationEngine) compileSubroutine(className string) {
 		return
 	}
 	c.symbolTable.StartSubroutine()
-	// c.writeString("<subroutineDec>\n")
-	// c.writeTokenAndAdvance()
-	var nLocals int
-	if c.tokenValue() == "method" {
-		nLocals = 1
-	} else {
-		nLocals = 0
+	if c.tokenValue() == "function" {
+		// c.writeString("<subroutineDec>\n")
+		// c.writeTokenAndAdvance()
+		nLocals := 0
+		c.advance()
+		// returnType := c.tokenValue()
+		c.compileTokenIsTypeOrVoid()
+		// c.compileIdentifier(true, "subroutine", "")
+		subroutineName := c.tokenValue()
+		c.advance()
+		c.compileTokenValue("(")
+		c.compileParameterList()
+		c.compileTokenValue(")")
+		c.compileTokenValue("{")
+		varDecBuffer := ""
+		varDecBuffer, nLocals = c.compileVarDec(varDecBuffer, nLocals)
+		c.output.WriteFunction(fmt.Sprintf("%s.%s", className, subroutineName), nLocals)
+		c.output.WriteString(varDecBuffer)
+		c.compileStatements()
+		c.compileTokenValue("}")
+		// if returnType == "void" {
+		// 	c.output.WritePush(writer.Const, "0")
+		// 	c.output.WriteReturn()
+		// }
+		// c.writeString("</subroutineDec>\n")
+	} else if c.tokenValue() == "constructor" {
+		// c.symbolTable.Define("this", className, cache.Arg)
+		nLocals := 0
+		c.advance()
+		// returnType := c.tokenValue()
+		c.compileTokenIsTypeOrVoid()
+		// c.compileIdentifier(true, "subroutine", "")
+		subroutineName := c.tokenValue()
+		c.advance()
+		c.compileTokenValue("(")
+		c.compileParameterList()
+		c.compileTokenValue(")")
+		c.compileTokenValue("{")
+		varDecBuffer := ""
+		varDecBuffer, nLocals = c.compileVarDec(varDecBuffer, nLocals)
+		c.output.WriteFunction(fmt.Sprintf("%s.%s", className, subroutineName), nLocals)
+		c.output.WriteString(varDecBuffer)
+		numOfFieldVars := c.symbolTable.FieldIndex
+		c.output.WritePush(writer.Const, strconv.Itoa(numOfFieldVars))
+		c.output.WriteCall("Memory.alloc", 1)
+		c.output.WritePop(writer.Pointer, 0)
+		c.compileStatements()
+		c.compileTokenValue("}")
+	} else if c.tokenValue() == "method" {
+		c.symbolTable.Define("this", className, cache.Arg)
+		nLocals := 0
+		c.advance()
+		// returnType := c.tokenValue()
+		c.compileTokenIsTypeOrVoid()
+		// c.compileIdentifier(true, "subroutine", "")
+		subroutineName := c.tokenValue()
+		c.advance()
+		c.compileTokenValue("(")
+		c.compileParameterList()
+		c.compileTokenValue(")")
+		c.compileTokenValue("{")
+		varDecBuffer := ""
+		varDecBuffer, nLocals = c.compileVarDec(varDecBuffer, nLocals)
+		c.output.WriteFunction(fmt.Sprintf("%s.%s", className, subroutineName), nLocals)
+		c.output.WritePush(writer.Arg, strconv.Itoa(0))
+		c.output.WritePop(writer.Pointer, 0)
+		c.output.WriteString(varDecBuffer)
+		c.compileStatements()
+		c.compileTokenValue("}")
 	}
-	c.advance()
-	// returnType := c.tokenValue()
-	c.compileTokenIsTypeOrVoid()
-	// c.compileIdentifier(true, "subroutine", "")
-	subroutineName := c.tokenValue()
-	c.advance()
-	c.compileTokenValue("(")
-	c.compileParameterList()
-	c.compileTokenValue(")")
-	c.compileTokenValue("{")
-	varDecBuffer := ""
-	varDecBuffer, nLocals = c.compileVarDec(varDecBuffer, nLocals)
-	c.output.WriteFunction(fmt.Sprintf("%s.%s", className, subroutineName), nLocals)
-	c.output.WriteString(varDecBuffer)
-	c.compileStatements()
-	c.compileTokenValue("}")
-	// if returnType == "void" {
-	// 	c.output.WritePush(writer.Const, "0")
-	// 	c.output.WriteReturn()
-	// }
-	// c.writeString("</subroutineDec>\n")
 	c.compileSubroutine(className)
 }
 
@@ -696,12 +773,12 @@ func (c *compilationEngine) CompileClass() {
 	c.advance()
 	c.compileTokenValue("class")
 	// c.compileIdentifier(true, "class", "")
-	className := c.tokenValue()
+	c.count.className = c.tokenValue()
 	c.advance()
 	c.compileTokenValue("{")
 	// c.advance()
 	c.compileClassVarDec()
-	c.compileSubroutine(className)
+	c.compileSubroutine(c.count.className)
 	c.compileFinalToken()
 	// c.writeString("</class>\n")
 }
