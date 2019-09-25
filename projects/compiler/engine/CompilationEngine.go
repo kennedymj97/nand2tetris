@@ -11,10 +11,16 @@ import (
 	"example.com/writer"
 )
 
+type count struct {
+	ifIdx    int
+	whileIdx int
+}
+
 type compilationEngine struct {
 	scanner     *tokenizer.Scanner
 	output      *writer.VMWriter
 	symbolTable *cache.SymbolTable
+	count       *count
 }
 
 func NewCompilationEngine(reader io.Reader, w *bufio.Writer) *compilationEngine {
@@ -22,6 +28,7 @@ func NewCompilationEngine(reader io.Reader, w *bufio.Writer) *compilationEngine 
 		tokenizer.NewScanner(reader),
 		writer.NewVMWriter(w),
 		cache.NewSymbolTable(),
+		&count{0, 0},
 	}
 }
 
@@ -281,6 +288,8 @@ func (c *compilationEngine) compileTerm() {
 		if c.tokenValue() == "true" {
 			c.output.WritePush(writer.Const, strconv.Itoa(1))
 			c.output.WriteArithmetic(writer.Neg)
+		} else if c.tokenValue() == "false" {
+			c.output.WritePush(writer.Const, strconv.Itoa(0))
 		}
 		c.advance()
 	} else if c.tokenCategory() == tokenizer.Identifier {
@@ -364,6 +373,7 @@ func (c *compilationEngine) compileElse() {
 	}
 	// c.writeTokenAndAdvance()
 	c.advance()
+
 	c.handleStatements()
 }
 
@@ -372,10 +382,30 @@ func (c *compilationEngine) compileIf() {
 		return
 	}
 	// c.writeString("<ifStatement>\n")
-	// c.writeTokenAndAdvance()
+	c.count.ifIdx++
+	ifIdxStr := strconv.Itoa(c.count.ifIdx)
 	c.advance()
-	c.handleExpressionStatements()
-	c.compileElse()
+	// compute not condition
+	c.handleExpressionBrackets()
+	c.output.WriteArithmetic(writer.Not)
+	// if not condition jump to else label
+	c.output.WriteIf("else" + ifIdxStr)
+	// compute code inside if
+	c.handleStatements()
+	// jump to end of statement label
+	c.output.WriteGoto("end" + ifIdxStr)
+	// write else label
+	c.output.WriteLabel("else" + ifIdxStr)
+	c.advance()
+	// compute code inside else
+	c.handleStatements()
+	// end of statement label
+	c.output.WriteLabel("end" + ifIdxStr)
+
+	// c.writeTokenAndAdvance()
+	// c.advance()
+	// c.handleExpressionStatements()
+	// c.compileElse()
 	// c.writeString("</ifStatement>\n")
 }
 
@@ -384,9 +414,25 @@ func (c *compilationEngine) compileWhile() {
 		return
 	}
 	// c.writeString("<whileStatement>\n")
-	// c.writeTokenAndAdvance()
+	c.count.whileIdx++
+	whileIdxStr := strconv.Itoa(c.count.whileIdx)
+	// write label here
+	c.output.WriteLabel("while" + whileIdxStr)
 	c.advance()
-	c.handleExpressionStatements()
+	// check if conditions met (if not jump to end label)
+	c.handleExpressionBrackets()
+	c.output.WriteArithmetic(writer.Not)
+	c.output.WriteIf("endWhile" + whileIdxStr)
+	// code inside while loop
+	c.handleStatements()
+	// goto start label
+	c.output.WriteGoto("while" + whileIdxStr)
+	// label for end of loop
+	c.output.WriteLabel("endWhile" + whileIdxStr)
+
+	// c.writeTokenAndAdvance()
+	// c.advance()
+	// c.handleExpressionStatements()
 	// c.writeString("</whileStatement>\n")
 }
 
@@ -428,11 +474,14 @@ func (c *compilationEngine) compileReturn() {
 	// handle empty return
 	if c.tokenValue() == ";" {
 		// c.writeTokenAndAdvance()
+		c.output.WritePush(writer.Const, strconv.Itoa(0))
+		c.output.WriteReturn()
 		c.advance()
 		// c.writeString("</returnStatement>\n")
 		return
 	}
 	c.compileExpression()
+	c.output.WriteReturn()
 	c.compileTokenValue(";")
 	// c.writeString("</returnStatement>\n")
 }
@@ -491,34 +540,33 @@ func (c *compilationEngine) compileTokenIsTypeOrVoid() {
 	}
 }
 
-func (c *compilationEngine) compileParameterList(nLocals int) int {
+func (c *compilationEngine) compileParameterList() {
 	// c.writeString("<parameterList>\n")
 	// handle empty parameter list
 	if c.tokenValue() == ")" {
 		// c.writeString("</parameterList>\n")
-		return nLocals
+		return
 	}
-	nLocals++
 	symbolType := c.tokenValue()
 	c.compileTokenIsType()
+	// need to add the variable to the argument symbol table
+	c.symbolTable.Define(c.tokenValue(), symbolType, cache.Arg)
 	// c.compileIdentifier(true, "arg", symbolType)
 	c.advance()
-	nLocals = c.handleMultipleParameters(symbolType, nLocals)
+	c.handleMultipleParameters(symbolType)
 	// c.writeString("</parameterList>\n")
-	return nLocals
 }
 
-func (c *compilationEngine) handleMultipleParameters(symbolType string, nLocals int) int {
+func (c *compilationEngine) handleMultipleParameters(symbolType string) {
 	if c.tokenValue() != "," {
-		return nLocals
+		return
 	}
-	nLocals++
 	// c.writeTokenAndAdvance()
 	c.advance()
 	c.compileTokenIsType()
 	c.compileIdentifier(true, "arg", symbolType)
-	nLocals = c.handleMultipleParameters(symbolType, nLocals)
-	return nLocals
+	c.handleMultipleParameters(symbolType)
+	return
 }
 
 func (c *compilationEngine) compileTokenIsType() {
@@ -540,29 +588,45 @@ func (c *compilationEngine) compileMultipleVarDecs(kind string, symbolType strin
 	c.compileMultipleVarDecs(kind, symbolType)
 }
 
-func (c *compilationEngine) compileVarDec() {
+func (c *compilationEngine) handleMultipleSubroutineVarDecs(symbolType string, buffer string, nLocals int) (string, int) {
+	if c.tokenValue() != "," {
+		return buffer, nLocals
+	}
+	nLocals++
+	c.advance()
+	varName := c.tokenValue()
+	c.symbolTable.Define(varName, symbolType, cache.Var)
+	buffer += "push constant 0\n"
+	idx := c.symbolTable.IndexOf(varName)
+	buffer += "pop local " + strconv.Itoa(idx) + "\n"
+	c.advance()
+	buffer, nLocals = c.handleMultipleSubroutineVarDecs(symbolType, buffer, nLocals)
+	return buffer, nLocals
+}
+
+func (c *compilationEngine) compileVarDec(buffer string, nLocals int) (string, int) {
 	if c.tokenValue() != "var" {
-		return
+		return buffer, nLocals
 	}
 	// c.writeString("<varDec>\n")
 	// c.writeTokenAndAdvance()
+	nLocals++
 	c.advance()
 	symbolType := c.tokenValue()
-	c.compileTokenIsType()
-	c.compileIdentifier(true, "var", symbolType)
-	c.compileMultipleVarDecs("var", symbolType)
+	// c.compileTokenIsType()
+	c.advance()
+	varName := c.tokenValue()
+	c.symbolTable.Define(varName, symbolType, cache.Var)
+	buffer += "push constant 0\n"
+	idx := c.symbolTable.IndexOf(varName)
+	buffer += "pop local " + strconv.Itoa(idx) + "\n"
+	c.advance()
+	// c.compileIdentifier(true, "var", symbolType)
+	buffer, nLocals = c.handleMultipleSubroutineVarDecs(symbolType, buffer, nLocals)
 	c.compileTokenValue(";")
 	// c.writeString("</varDec>\n")
-	c.compileVarDec()
-}
-
-func (c *compilationEngine) compileSubroutineBody() {
-	// c.writeString("<subroutineBody>\n")
-	c.compileTokenValue("{")
-	c.compileVarDec()
-	c.compileStatements()
-	c.compileTokenValue("}")
-	// c.writeString("</subroutineBody>\n")
+	buffer, nLocals = c.compileVarDec(buffer, nLocals)
+	return buffer, nLocals
 }
 
 func (c *compilationEngine) compileSubroutine(className string) {
@@ -579,20 +643,25 @@ func (c *compilationEngine) compileSubroutine(className string) {
 		nLocals = 0
 	}
 	c.advance()
-	returnType := c.tokenValue()
+	// returnType := c.tokenValue()
 	c.compileTokenIsTypeOrVoid()
 	// c.compileIdentifier(true, "subroutine", "")
 	subroutineName := c.tokenValue()
 	c.advance()
 	c.compileTokenValue("(")
-	nLocals = c.compileParameterList(nLocals)
+	c.compileParameterList()
 	c.compileTokenValue(")")
+	c.compileTokenValue("{")
+	varDecBuffer := ""
+	varDecBuffer, nLocals = c.compileVarDec(varDecBuffer, nLocals)
 	c.output.WriteFunction(fmt.Sprintf("%s.%s", className, subroutineName), nLocals)
-	c.compileSubroutineBody()
-	if returnType == "void" {
-		c.output.WritePush(writer.Const, "0")
-		c.output.WriteReturn()
-	}
+	c.output.WriteString(varDecBuffer)
+	c.compileStatements()
+	c.compileTokenValue("}")
+	// if returnType == "void" {
+	// 	c.output.WritePush(writer.Const, "0")
+	// 	c.output.WriteReturn()
+	// }
 	// c.writeString("</subroutineDec>\n")
 	c.compileSubroutine(className)
 }
