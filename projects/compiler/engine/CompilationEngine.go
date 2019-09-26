@@ -336,6 +336,8 @@ func (c *compilationEngine) compileTerm() {
 			c.output.WritePush(writer.Const, strconv.Itoa(0))
 		} else if c.tokenValue() == "this" {
 			c.output.WritePush(writer.Pointer, strconv.Itoa(0))
+		} else if c.tokenValue() == "null" {
+			c.output.WritePush(writer.Const, strconv.Itoa(0))
 		}
 		c.advance()
 	} else if c.tokenCategory() == tokenizer.Identifier {
@@ -510,6 +512,7 @@ func (c *compilationEngine) compileDo() {
 	// c.writeTokenAndAdvance()
 	c.advance()
 	c.compileTerm()
+	c.output.WritePop(writer.Temp, 0)
 	c.advance()
 	// identifierName := c.tokenValue()
 	// c.advance()

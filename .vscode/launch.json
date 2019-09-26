@@ -11,7 +11,7 @@
             "mode": "auto",
             "program": "${fileDirname}",
             "env": {},
-            "args": ["../../11/Square/"]
+            "args": ["../../11/Pong/Ball.jack"]
         }
     ]
 }

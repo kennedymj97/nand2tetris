@@ -214,6 +214,9 @@ type Scanner struct {
 func NewScanner(file io.Reader) *Scanner {
 	bufioScanner := bufio.NewScanner(file)
 	bufioScanner.Split(scanTokens)
+	const maxCap = 4096 * 2
+	buf := make([]byte, maxCap)
+	bufioScanner.Buffer(buf, maxCap)
 	return &Scanner{bufioScanner, &token{}}
 }
 
@@ -263,7 +266,7 @@ func isComment(data []byte) (bool, int) {
 	if string(data[:2]) == "//" {
 		width = bytes.IndexByte(data, '\n') + 1
 		return true, width
-	} else if string(data[:3]) == "/**" {
+	} else if len(data) > 2 && string(data[:3]) == "/**" {
 		width = bytes.Index(data, []byte("*/")) + 2
 		return true, width
 	}
