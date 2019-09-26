@@ -319,6 +319,9 @@ func (c *compilationEngine) compileTerm() {
 		c.advance()
 	} else if c.tokenCategory() == tokenizer.StringConst {
 		// c.writeTokenAndAdvance()
+		length := len(c.tokenValue())
+		c.output.WritePush(writer.Const, strconv.Itoa(length))
+		c.output.WriteCall("String.new", 1)
 		c.advance()
 	} else if c.tokenCategory() == tokenizer.Keyword {
 		if c.tokenValue() == "true" {
@@ -380,6 +383,7 @@ func (c *compilationEngine) compileLet() {
 		c.advance() // advance to the index
 		c.compileExpression()
 		c.output.WriteArithmetic(writer.Add)
+		c.advance()
 	}
 	c.advance()
 	// complete operation after the equals
