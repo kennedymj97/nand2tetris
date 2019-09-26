@@ -319,9 +319,14 @@ func (c *compilationEngine) compileTerm() {
 		c.advance()
 	} else if c.tokenCategory() == tokenizer.StringConst {
 		// c.writeTokenAndAdvance()
+		str := c.tokenValue()
 		length := len(c.tokenValue())
 		c.output.WritePush(writer.Const, strconv.Itoa(length))
 		c.output.WriteCall("String.new", 1)
+		for _, char := range str {
+			c.output.WritePush(writer.Const, strconv.Itoa(int(char)))
+			c.output.WriteCall("String.appendChar", 2)
+		}
 		c.advance()
 	} else if c.tokenCategory() == tokenizer.Keyword {
 		if c.tokenValue() == "true" {
