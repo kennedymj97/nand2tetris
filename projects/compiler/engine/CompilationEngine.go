@@ -262,6 +262,17 @@ func (c *compilationEngine) handleIdentifierTerm() {
 			c.output.WriteCall(fmt.Sprintf("%s.%s", objType, functionName), nArgs)
 		}
 		// functionName, nArgs := c.compileObjectUse()
+	case "[":
+		kind := c.symbolTable.KindOf(identifierName)
+		idx := c.symbolTable.IndexOf(identifierName)
+		seg := convertKindToSegment(kind)
+		c.output.WritePush(seg, strconv.Itoa(idx))
+		c.advance() // advance to the index
+		c.compileExpression()
+		c.output.WriteArithmetic(writer.Add)
+		c.output.WritePop(writer.Pointer, 1)
+		c.output.WritePush(writer.That, strconv.Itoa(0))
+		c.advance()
 	default:
 		// get the kind and index
 		kind := c.symbolTable.KindOf(identifierName)
@@ -362,12 +373,27 @@ func (c *compilationEngine) compileLet() {
 	index := c.symbolTable.IndexOf(c.tokenValue())
 	c.advance()
 	// need to handle arrays here
+	isArrayAssignment := c.tokenValue() == "["
+	if isArrayAssignment {
+		seg := convertKindToSegment(kind)
+		c.output.WritePush(seg, strconv.Itoa(index))
+		c.advance() // advance to the index
+		c.compileExpression()
+		c.output.WriteArithmetic(writer.Add)
+	}
 	c.advance()
 	// complete operation after the equals
 	c.compileExpression()
 	// pop the result back to the index/variable found
-	segment := convertKindToSegment(kind)
-	c.output.WritePop(segment, index)
+	if isArrayAssignment {
+		c.output.WritePop(writer.Temp, 0)
+		c.output.WritePop(writer.Pointer, 1)
+		c.output.WritePush(writer.Temp, strconv.Itoa(0))
+		c.output.WritePop(writer.That, 0)
+	} else {
+		segment := convertKindToSegment(kind)
+		c.output.WritePop(segment, index)
+	}
 	c.advance()
 
 	// c.writeString("<letStatement>\n")
